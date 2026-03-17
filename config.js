@@ -3,19 +3,19 @@
 const GITHUB_PAGES_URL = "https://russellott.github.io/demosmartapp";
 
 const FHIR_SERVERS = {
-    // SMART Health IT Sandbox (Public Client - no secret needed)
+    // SMART Health IT Sandbox
     sandbox: {
         name: "SMART Health IT Sandbox",
-        clientId: "123456",
-        clientSecret: null, // Public client - no secret
+        clientId: "YOUR_SANDBOX_CLIENT_ID",
+        clientSecret: null,
         scope: "launch/patient patient/*.read openid fhirUser",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
         iss: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/fhir",
-        description: "Public testing sandbox with sample patients"
+        description: "Public testing sandbox with sample patients (R4, AUTO simulation)"
     },
     
-    // Cigna FHIR Server (May require client secret)
+    // Cigna FHIR Server
     cigna: {
         name: "Cigna Developer API",
         clientId: "REDACTED_CIGNA_P2P_CLIENT_ID",
@@ -27,16 +27,16 @@ const FHIR_SERVERS = {
         authorizeUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/authorize",
         tokenUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/token",
         description: "Real payer FHIR API for CMS Patient Access",
-        // Cigna-specific settings
-        usePKCE: false, // Cigna may not require PKCE
-        confidential: true // Requires client_secret
+        // Cigna-specific requirements
+        requiresStateNonce: true, // Cigna needs state and nonce parameters
+        useNumericStateNonce: true // Cigna wants simple numeric values
     },
     
     // Anthem FHIR Server
     anthem: {
         name: "Anthem FHIR API",
         clientId: "YOUR_ANTHEM_CLIENT_ID",
-        clientSecret: "YOUR_ANTHEM_CLIENT_SECRET", // Add your client secret here
+        clientSecret: "YOUR_ANTHEM_CLIENT_SECRET",
         scope: "patient/*.read launch/patient openid fhirUser",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
@@ -48,31 +48,26 @@ const FHIR_SERVERS = {
     logica: {
         name: "Logica Health Sandbox",
         clientId: "YOUR_LOGICA_CLIENT_ID",
-        clientSecret: null, // Typically public
+        clientSecret: null,
         scope: "launch/patient patient/*.read openid fhirUser",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        iss: null,
+        iss: "https://api.logicahealth.org/FHIRResearchSandbox/open/",
         description: "Advanced testing sandbox with rich test data"
-    },
-    
-    // Custom server template
-    custom: {
-        name: "Custom FHIR Server",
-        clientId: "YOUR_CLIENT_ID",
-        clientSecret: "YOUR_CLIENT_SECRET", // Add if required
-        scope: "patient/*.read launch/patient openid fhirUser",
-        redirectUri: `${GITHUB_PAGES_URL}/app.html`,
-        launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        iss: "YOUR_FHIR_SERVER_BASE_URL",
-        authorizeUrl: "YOUR_AUTHORIZE_ENDPOINT",
-        tokenUrl: "YOUR_TOKEN_ENDPOINT",
-        description: "Custom FHIR server configuration"
     }
 };
 
-// Set which server to use
-const ACTIVE_SERVER = 'sandbox';
+// Set which server to use by default
+const ACTIVE_SERVER = 'cigna';
+
+// Helper function to generate numeric state/nonce
+function generateNumericToken(length = 10) {
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += Math.floor(Math.random() * 10);
+    }
+    return result;
+}
 
 // Helper function to get current configuration
 function getCurrentConfig() {
@@ -86,7 +81,8 @@ function isServerConfigured(serverKey) {
     
     const placeholders = [
         'YOUR_CLIENT_ID',
-        'YOUR_' + serverKey.toUpperCase() + '_CLIENT_ID'
+        'YOUR_' + serverKey.toUpperCase() + '_CLIENT_ID',
+        'YOUR_SANDBOX_CLIENT_ID'
     ];
     
     return !placeholders.some(p => server.clientId.includes(p));
