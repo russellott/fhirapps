@@ -727,6 +727,10 @@
                     fullUrl = JSON.stringify(url);
                 }
 
+                addDebugLog('FHIR', `url: ${url}`);
+                addDebugLog('FHIR', `fullUrl: ${fullUrl}`);
+                addDebugLog('FHIR', `client.state.serverUrl: ${url}`);
+
                 console.log(`\n=== 🔍 FHIR Request ===`);
                 console.log('Resource/URL:', url);
                 console.log('Full URL:', fullUrl);
