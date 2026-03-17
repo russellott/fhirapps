@@ -5,7 +5,7 @@ const FHIR_SERVERS = {
     // SMART Health IT Sandbox (for testing)
     sandbox: {
         name: "SMART Health IT Sandbox",
-        clientId: "YOUR_SANDBOX_CLIENT_ID",
+        clientId: "123456",
         scope: "launch/patient patient/*.read openid fhirUser",
         redirectUri: "http://russellott.github.io/demosmartapp/index.html",
         iss: null, // Will come from launch parameters
