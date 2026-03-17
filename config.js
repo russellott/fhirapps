@@ -6,7 +6,7 @@ const FHIR_SERVERS = {
     // SMART Health IT Sandbox
     sandbox: {
         name: "SMART Health IT Sandbox",
-        clientId: "YOUR_SANDBOX_CLIENT_ID",
+        clientId: "123456",
         clientSecret: null,
         scope: "launch/patient patient/*.read openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
