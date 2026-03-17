@@ -16,7 +16,7 @@ const FHIR_SERVERS = {
         clientId: "a780273e-86b1-4dee-8fe8-087780d1c316",
         scope: "patient/*.read launch/patient openid fhirUser",
         redirectUri: "http://russellott.github.io/demosmartapp/index.html",
-        iss: "https://fhir.developer.cigna.com/fhir",
+        iss: "https://fhir.cigna.com/PatientAccess/v1-devportal/",
         // Cigna-specific endpoints
         authorizeUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/authorize",
         tokenUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/token"
