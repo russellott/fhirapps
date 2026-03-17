@@ -8,7 +8,7 @@ const FHIR_SERVERS = {
         clientId: "123456",
         scope: "launch/patient patient/*.read openid fhirUser",
         redirectUri: "http://russellott.github.io/demosmartapp/index.html",
-        iss: "https://launch.smarthealthit.org/fhir", // Will come from launch parameters
+        iss: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/fhir", // Will come from launch parameters
         // Note: Sandbox uses dynamic ISS from launch context
     },
     
