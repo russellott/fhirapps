@@ -672,7 +672,7 @@
                     addDebugLog('FHIR', `Client initialized with base URL: ${clientBaseUrl}`);
 
                     // Load patient data
-                    loadPatientData(client, fullClientState.serverUrl);
+                    loadPatientData(client, clientBaseUrl);
 
                 } catch (error) {
                     addDebugLog('ERROR', `Failed to create FHIR client: ${error.message}`);
@@ -728,7 +728,7 @@
                 }
 
                 addDebugLog('FHIR', `url: ${url}`);
-                addDebugLog('FHIR', `fullUrl: ${fullUrl}`);
+                addDebugLog('FHIR', `fullUrl: ${fullurl}`);
                 addDebugLog('FHIR', `client.state.serverUrl: ${url}`);
 
                 console.log(`\n=== 🔍 FHIR Request ===`);
