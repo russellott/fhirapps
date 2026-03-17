@@ -7,7 +7,7 @@ const FHIR_SERVERS = {
         name: "SMART Health IT Sandbox",
         clientId: "123456",
         scope: "launch/patient patient/*.read openid fhirUser",
-        redirectUri: "${GITHUB_PAGES_URL}/app.html",
+        redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         iss: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/fhir", // Will come from launch parameters
         // Note: Sandbox uses dynamic ISS from launch context
     },
@@ -17,7 +17,7 @@ const FHIR_SERVERS = {
         name: "Cigna Developer API",
         clientId: "a780273e-86b1-4dee-8fe8-087780d1c316",
         scope: "patient/*.read launch/patient openid fhirUser",
-        redirectUri: "${GITHUB_PAGES_URL}/app.html",
+        redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         iss: "https://fhir.cigna.com/PatientAccess/v1-devportal/",
         // Cigna-specific endpoints
         authorizeUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/authorize",
@@ -29,7 +29,7 @@ const FHIR_SERVERS = {
         name: "Anthem FHIR API",
         clientId: "YOUR_ANTHEM_CLIENT_ID",
         scope: "patient/*.read launch/patient openid fhirUser",
-        redirectUri: "${GITHUB_PAGES_URL}/app.html",
+        redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         iss: "https://fhir.anthem.com/fhir",
         // Anthem will provide these during registration
         authorizeUrl: null,
@@ -41,7 +41,7 @@ const FHIR_SERVERS = {
         name: "Custom FHIR Server",
         clientId: "YOUR_CLIENT_ID",
         scope: "patient/*.read launch/patient openid fhirUser",
-        redirectUri: "${GITHUB_PAGES_URL}/app.html",
+        redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         iss: "YOUR_FHIR_SERVER_BASE_URL",
         authorizeUrl: "YOUR_AUTHORIZE_ENDPOINT",
         tokenUrl: "YOUR_TOKEN_ENDPOINT"
