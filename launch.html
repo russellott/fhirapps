@@ -96,14 +96,17 @@
             if (!launch && !iss) {
                 document.body.innerHTML = '<div class="error">No ISS specified</div>';
             } else {
-                // Generate state and nonce
+                // ALWAYS generate state and nonce for OAuth security
+                // Use numeric format for Cigna, standard format for others
                 let state, nonce;
                 
                 if (config.useNumericStateNonce) {
+                    // Cigna requires simple numeric values
                     state = generateNumericToken(12);
                     nonce = generateNumericToken(12);
-                    console.log('✓ Generated numeric state and nonce for Cigna');
+                    console.log('✓ Generated numeric state and nonce (Cigna format)');
                 } else {
+                    // Standard random alphanumeric strings for other servers
                     state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
                     nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
                     console.log('✓ Generated standard state and nonce');
@@ -153,16 +156,15 @@
                     <small style="color: #666;">Building authorization request...</small>
                 `;
                 
-                // Build authorization parameters
+                // Build authorization parameters - ALWAYS include state
                 const authParams = {
                     clientId: config.clientId,
-                    scope: config.scope,  // This now includes offline_access
-                    redirectUri: config.redirectUri
+                    scope: config.scope,
+                    redirectUri: config.redirectUri,
+                    state: state  // ALWAYS include state parameter
                 };
                 
-                // Add state and nonce
-                authParams.state = state;
-                
+                // Add nonce for OpenID Connect flows
                 if (config.scope.includes('openid')) {
                     authParams.nonce = nonce;
                     console.log('✓ Including nonce for OpenID Connect flow');
@@ -198,29 +200,32 @@
                     clientSecret: authParams.clientSecret ? '***HIDDEN***' : 'not provided'
                 });
                 
-                // For Cigna, manually build the authorize URL
-                if (serverParam === 'cigna' || config.requiresStateNonce) {
-                    console.log('=== Using Custom Authorization for Cigna ===');
+                // Store state in sessionStorage for ALL servers
+                const stateKey = `oauth_state_${state}`;
+                const stateData = {
+                    serverUrl: iss,
+                    clientId: config.clientId,
+                    clientSecret: config.clientSecret,
+                    tokenUri: config.tokenUrl,
+                    redirectUri: config.redirectUri,
+                    state: state,
+                    nonce: nonce,
+                    scope: config.scope
+                };
+                
+                sessionStorage.setItem(stateKey, JSON.stringify(stateData));
+                console.log('✓ State saved to sessionStorage:', stateKey);
+                
+                // For servers with custom OAuth endpoints (like Cigna), build URL manually
+                if (config.authorizeUrl && config.tokenUrl) {
+                    console.log('=== Using Custom Authorization Endpoints ===');
                     
-                    // Store state for validation after redirect
-                    const stateKey = `oauth_state_${state}`;
-                    sessionStorage.setItem(stateKey, JSON.stringify({
-                        serverUrl: iss,
-                        clientId: config.clientId,
-                        clientSecret: config.clientSecret,
-                        tokenUri: config.tokenUrl,
-                        redirectUri: config.redirectUri,
-                        state: state,
-                        nonce: nonce,
-                        scope: config.scope  // Includes offline_access
-                    }));
-                    
-                    // Build authorize URL manually with ALL scopes
+                    // Build authorize URL manually with ALL required parameters
                     const authorizeParams = new URLSearchParams({
                         response_type: 'code',
                         client_id: config.clientId,
                         redirect_uri: config.redirectUri,
-                        scope: config.scope,  // This includes offline_access
+                        scope: config.scope,
                         state: state,
                         nonce: nonce
                     });
@@ -228,6 +233,11 @@
                     // Add aud parameter (FHIR server URL)
                     if (iss) {
                         authorizeParams.append('aud', iss);
+                    }
+                    
+                    // Add launch parameter if present
+                    if (launch) {
+                        authorizeParams.append('launch', launch);
                     }
                     
                     const authorizeUrl = `${config.authorizeUrl}?${authorizeParams.toString()}`;
@@ -244,11 +254,15 @@
                         }
                     }
                     
-                    // Verify offline_access is in the URL
-                    if (!authorizeUrl.includes('offline_access')) {
-                        console.error('⚠️ WARNING: offline_access NOT found in authorize URL!');
+                    // Verify critical parameters
+                    if (!authorizeUrl.includes('state=')) {
+                        console.error('⚠️ WARNING: state parameter NOT found in authorize URL!');
                     } else {
-                        console.log('✓ Confirmed: offline_access scope is in authorize URL');
+                        console.log('✓ Confirmed: state parameter is in authorize URL');
+                    }
+                    
+                    if (config.scope.includes('offline_access') && !authorizeUrl.includes('offline_access')) {
+                        console.error('⚠️ WARNING: offline_access NOT found in authorize URL!');
                     }
                     
                     // Add info to page
@@ -266,9 +280,16 @@
                     }, 2000);
                     
                 } else {
-                    // Use standard FHIR client authorization for other servers
-                    console.log('Using standard FHIR client authorization');
-                    console.log('Scope being sent:', authParams.scope);
+                    // Use standard FHIR client authorization for servers with auto-discovery
+                    console.log('=== Using FHIR Client Auto-Discovery ===');
+                    console.log('Authorization parameters:', {
+                        ...authParams,
+                        clientSecret: authParams.clientSecret ? '***HIDDEN***' : 'not provided'
+                    });
+                    
+                    // The FHIR client should handle state automatically, but let's verify
+                    console.log('✓ State will be managed by FHIR client library');
+                    console.log('✓ State stored in sessionStorage for validation');
                     
                     FHIR.oauth2.authorize(authParams).catch(function(error) {
                         console.error('Authorization failed:', error);
