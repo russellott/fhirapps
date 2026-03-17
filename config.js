@@ -23,10 +23,13 @@ const FHIR_SERVERS = {
         scope: "patient/*.read launch/patient openid fhirUser",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        iss: "https://fhir.developer.cigna.com/fhir",
-        authorizeUrl: "https://fhir.developer.cigna.com/authorize",
-        tokenUrl: "https://fhir.developer.cigna.com/token",
-        description: "Real payer FHIR API for CMS Patient Access"
+        iss: "https://fhir.cigna.com/PatientAccess/v1-devportal",
+        authorizeUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/authorize",
+        tokenUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/token",
+        description: "Real payer FHIR API for CMS Patient Access",
+        // Cigna-specific settings
+        usePKCE: false, // Cigna may not require PKCE
+        confidential: true // Requires client_secret
     },
     
     // Anthem FHIR Server
