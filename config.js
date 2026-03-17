@@ -3,16 +3,18 @@
 const GITHUB_PAGES_URL = "https://russellott.github.io/demosmartapp";
 
 const FHIR_SERVERS = {
-    // SMART Health IT Sandbox
+    // SMART Health IT Sandbox - Public Testing Sandbox (No Registration Required)
     sandbox: {
         name: "SMART Health IT Sandbox",
-        clientId: "123456",
+        // Public client ID for testing - no registration needed
+        clientId: "demo_app_whatever",  // SMART sandbox accepts any client_id
         clientSecret: null,
         scope: "launch/patient patient/*.read openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
         iss: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/fhir",
-        description: "Public testing sandbox with sample patients (R4, AUTO simulation)"
+        description: "Public testing sandbox with sample patients (R4, AUTO simulation)",
+        isPublic: true  // Flag to indicate this is a public sandbox
     },
     
     // Cigna FHIR Server
@@ -20,7 +22,6 @@ const FHIR_SERVERS = {
         name: "Cigna Developer API",
         clientId: "REDACTED_CIGNA_P2P_CLIENT_ID",
         clientSecret: "REDACTED_CIGNA_P2P_CLIENT_SECRET",
-        // UPDATED: Added offline_access scope for refresh token
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
@@ -44,16 +45,17 @@ const FHIR_SERVERS = {
         description: "Anthem's CMS-compliant Patient Access API"
     },
     
-    // Logica Health Sandbox
+    // Logica Health Sandbox - Another Public Testing Option
     logica: {
         name: "Logica Health Sandbox",
-        clientId: "YOUR_LOGICA_CLIENT_ID",
+        clientId: "demo_app_logica",  // Logica also accepts any client_id for testing
         clientSecret: null,
         scope: "launch/patient patient/*.read openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
         iss: "https://api.logicahealth.org/FHIRResearchSandbox/open/",
-        description: "Advanced testing sandbox with rich test data"
+        description: "Advanced testing sandbox with rich test data",
+        isPublic: true
     }
 };
 
@@ -79,10 +81,18 @@ function isServerConfigured(serverKey) {
     const server = FHIR_SERVERS[serverKey];
     if (!server || !server.clientId) return false;
     
+    // Public sandboxes are always "configured" - they don't need registration
+    if (server.isPublic) {
+        return true;
+    }
+    
+    // For private/production servers, check if they have real credentials
     const placeholders = [
         'YOUR_CLIENT_ID',
         'YOUR_' + serverKey.toUpperCase() + '_CLIENT_ID',
-        'YOUR_SANDBOX_CLIENT_ID'
+        'YOUR_SANDBOX_CLIENT_ID',
+        'YOUR_ANTHEM_CLIENT_ID',
+        'YOUR_LOGICA_CLIENT_ID'
     ];
     
     return !placeholders.some(p => server.clientId.includes(p));
