@@ -468,7 +468,7 @@
             const storedStateStr = sessionStorage.getItem(stateKey);
             
             if (!storedStateStr) {
-                addDebugLog('ERROR', 'State validation failed - no stored state found');
+                addDebugLog('ERROR', `State validation failed - no stored state found for stateKey = ${stateKey}`);
                 debugInfo.errors.push({
                     time: new Date().toISOString(),
                     message: 'State validation failed'
