@@ -713,8 +713,12 @@
             };
 
             // Intercept client.request to log full URLs
+            
             const originalRequest = client.request.bind(client);
             client.request = function (url, options) {
+                
+                // DEBUG - hotwiring url
+                url=client.state.serverUrl;
                 // Build the full URL for logging
                 let fullUrl;
                 if (typeof url === 'string') {
