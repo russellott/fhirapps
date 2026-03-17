@@ -6,7 +6,7 @@
     <script src="config.js"></script>
     <script src="token-handler.js"></script>
     <style>
-        /* Same styles as before */
+        /* Same styles as before... */
         body {
             font-family: Arial, sans-serif;
             max-width: 1200px;
@@ -147,6 +147,10 @@
             font-weight: bold;
             color: #0076ce;
         }
+        .stat-label {
+            color: #666;
+            margin-top: 5px;
+        }
         .success-badge {
             background: #4caf50;
             color: white;
@@ -244,6 +248,14 @@
                             <span class="debug-value">${state.nonce || 'N/A'}</span>
                         </div>
                         <div class="debug-line">
+                            <span class="debug-label">Server URL:</span>
+                            <span class="debug-value">${state.serverUrl || 'N/A'}</span>
+                        </div>
+                        <div class="debug-line">
+                            <span class="debug-label">Token URI:</span>
+                            <span class="debug-value">${state.tokenUri || 'N/A'}</span>
+                        </div>
+                        <div class="debug-line">
                             <span class="debug-label">Client ID:</span>
                             <span class="debug-value">${state.clientId || 'N/A'}</span>
                         </div>
@@ -283,6 +295,27 @@
                 `;
             }
             
+            if (debugInfo.fhirRequests.length > 0) {
+                html += '<div class="debug-section"><h3>🔗 FHIR API Requests</h3>';
+                debugInfo.fhirRequests.forEach((req, idx) => {
+                    html += `
+                        <div style="margin: 10px 0; padding: 10px; background: #1e272e; border-radius: 4px;">
+                            <div class="debug-line">
+                                <span class="debug-label">#${idx + 1} ${req.method}:</span>
+                                <span class="debug-value">${req.url}</span>
+                            </div>
+                            ${req.status ? `
+                            <div class="debug-line">
+                                <span class="debug-label">Status:</span>
+                                <span class="debug-value">${req.status}</span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
             html += '<div class="debug-section"><h3>⏱️ Timeline</h3>';
             debugInfo.timestamps.forEach(log => {
                 html += `
@@ -294,6 +327,19 @@
                 `;
             });
             html += '</div>';
+            
+            if (debugInfo.errors.length > 0) {
+                html += '<div class="debug-section" style="border-left-color: #f44336;"><h3 style="color: #f44336;">❌ Errors</h3>';
+                debugInfo.errors.forEach(error => {
+                    html += `
+                        <div class="debug-line">
+                            <span style="color: #90a4ae; font-size: 11px;">${new Date(error.time).toLocaleTimeString()}</span>
+                            <span class="debug-value" style="color: #f44336;">${error.message}</span>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
             
             content.innerHTML = html;
         }
@@ -320,6 +366,11 @@
             
             if (!storedStateStr) {
                 addDebugLog('ERROR', 'State validation failed - no stored state found');
+                debugInfo.errors.push({
+                    time: new Date().toISOString(),
+                    message: 'State validation failed'
+                });
+                updateDebugPanel();
                 document.getElementById('content').innerHTML = 
                     '<div class="error"><strong>Error:</strong> Session state not found. Please try launching again.</div>';
             } else {
@@ -382,6 +433,7 @@
                         };
                         updateDebugPanel();
                         
+                        // Load FHIR client with complete state
                         loadFhirClient(clientState, tokenData);
                     })
                     .catch(error => {
@@ -401,34 +453,170 @@
             window.location.href = 'index.html';
         }
         
+        // FIXED: Load FHIR client with complete OAuth state
         function loadFhirClient(clientState, tokenData) {
+            addDebugLog('FHIR', 'Loading FHIR client library...');
+            
             const script = document.createElement('script');
             script.src = 'https://cdn.jsdelivr.net/npm/fhirclient@2.5.2/build/fhir-client.min.js';
             script.onload = function() {
-                const client = FHIR.client({
+                addDebugLog('FHIR', 'FHIR client library loaded');
+                
+                // Build complete client state with all OAuth information
+                const fullClientState = {
                     serverUrl: clientState.serverUrl,
-                    tokenResponse: tokenData
+                    clientId: clientState.clientId,
+                    scope: clientState.scope,
+                    redirectUri: clientState.redirectUri,
+                    tokenUri: clientState.tokenUri,  // CRITICAL: Include tokenUri
+                    tokenResponse: {
+                        access_token: tokenData.access_token,
+                        token_type: tokenData.token_type || 'Bearer',
+                        expires_in: tokenData.expires_in,
+                        scope: tokenData.scope || clientState.scope,
+                        patient: tokenData.patient,
+                        id_token: tokenData.id_token,
+                        refresh_token: tokenData.refresh_token
+                    }
+                };
+                
+                // If client secret exists, include it for potential refresh
+                if (clientState.clientSecret) {
+                    fullClientState.clientSecret = clientState.clientSecret;
+                    addDebugLog('FHIR', '✓ Client secret included for token refresh capability');
+                }
+                
+                console.log('=== Creating FHIR Client ===');
+                console.log('Full client state:', {
+                    ...fullClientState,
+                    clientSecret: fullClientState.clientSecret ? '***HIDDEN***' : 'not provided',
+                    tokenResponse: {
+                        ...fullClientState.tokenResponse,
+                        access_token: fullClientState.tokenResponse.access_token ? 
+                            fullClientState.tokenResponse.access_token.substring(0, 20) + '...' : 'N/A'
+                    }
                 });
                 
-                loadPatientData(client);
+                try {
+                    // Create FHIR client with complete state
+                    const client = FHIR.client(fullClientState);
+                    
+                    addDebugLog('FHIR', '✓ FHIR client initialized successfully');
+                    
+                    // Verify client has all necessary properties
+                    console.log('Client properties:', {
+                        hasServerUrl: !!client.state.serverUrl,
+                        hasTokenResponse: !!client.state.tokenResponse,
+                        hasTokenUri: !!client.state.tokenUri,
+                        hasPatientId: !!client.patient?.id
+                    });
+                    
+                    // Load patient data
+                    loadPatientData(client);
+                    
+                } catch (error) {
+                    addDebugLog('ERROR', `Failed to create FHIR client: ${error.message}`);
+                    debugInfo.errors.push({
+                        time: new Date().toISOString(),
+                        message: `FHIR client creation error: ${error.message}`
+                    });
+                    updateDebugPanel();
+                    
+                    document.getElementById('content').innerHTML = 
+                        `<div class="error"><strong>FHIR Client Error:</strong> ${error.message}</div>`;
+                }
             };
+            
+            script.onerror = function() {
+                addDebugLog('ERROR', 'Failed to load FHIR client library');
+                document.getElementById('content').innerHTML = 
+                    '<div class="error">Failed to load FHIR client library</div>';
+            };
+            
             document.head.appendChild(script);
         }
         
         function loadPatientData(client) {
-            const stats = { conditions: 0, medications: 0, immunizations: 0, claims: 0 };
+            addDebugLog('FHIR', 'Starting to fetch patient data...');
             
-            client.patient.read().then(patient => {
-                displayPatientInfo(patient);
-                return client.request(`Condition?patient=${patient.id}`, { pageLimit: 0, flat: true });
-            }).then(conditions => {
-                stats.conditions = conditions.length;
-                displayConditions(conditions);
-                displayStats(stats);
-            }).catch(error => {
-                document.getElementById('content').innerHTML = 
-                    `<div class="error"><strong>Error:</strong> ${error.message}</div>`;
-            });
+            const stats = { 
+                conditions: 0, 
+                medications: 0, 
+                immunizations: 0, 
+                claims: 0 
+            };
+            
+            // Track FHIR requests
+            const originalRequest = client.request.bind(client);
+            client.request = function(...args) {
+                const url = args[0];
+                addDebugLog('FHIR', `Requesting: ${url}`);
+                debugInfo.fhirRequests.push({
+                    method: 'GET',
+                    url: typeof url === 'string' ? url : JSON.stringify(url),
+                    time: new Date().toISOString()
+                });
+                updateDebugPanel();
+                
+                return originalRequest(...args).then(result => {
+                    addDebugLog('FHIR', `✓ Request successful: ${url}`);
+                    return result;
+                }).catch(error => {
+                    addDebugLog('ERROR', `✗ Request failed: ${url} - ${error.message}`);
+                    throw error;
+                });
+            };
+            
+            client.patient.read()
+                .then(patient => {
+                    addDebugLog('FHIR', `✓ Patient data retrieved: ${patient.id}`);
+                    displayPatientInfo(patient);
+                    
+                    return client.request(`Condition?patient=${patient.id}`, {
+                        pageLimit: 0,
+                        flat: true
+                    });
+                })
+                .then(conditions => {
+                    addDebugLog('FHIR', `✓ Found ${conditions.length} conditions`);
+                    stats.conditions = conditions.length;
+                    displayConditions(conditions);
+                    
+                    return client.request(`MedicationRequest?patient=${client.patient.id}`, {
+                        pageLimit: 0,
+                        flat: true
+                    });
+                })
+                .then(medications => {
+                    addDebugLog('FHIR', `✓ Found ${medications.length} medications`);
+                    stats.medications = medications.length;
+                    displayMedications(medications);
+                    
+                    return client.request(`Immunization?patient=${client.patient.id}`, {
+                        pageLimit: 0,
+                        flat: true
+                    });
+                })
+                .then(immunizations => {
+                    addDebugLog('FHIR', `✓ Found ${immunizations.length} immunizations`);
+                    stats.immunizations = immunizations.length;
+                    displayImmunizations(immunizations);
+                    displayStats(stats);
+                    
+                    addDebugLog('SUCCESS', '✓ All patient data loaded successfully');
+                })
+                .catch(error => {
+                    addDebugLog('ERROR', `FHIR request error: ${error.message}`);
+                    debugInfo.errors.push({
+                        time: new Date().toISOString(),
+                        message: `FHIR request error: ${error.message}`
+                    });
+                    updateDebugPanel();
+                    
+                    document.getElementById('content').innerHTML += 
+                        `<div class="error"><strong>Error loading data:</strong> ${error.message}</div>`;
+                    console.error('FHIR request error:', error);
+                });
         }
         
         function displayStats(stats) {
@@ -441,32 +629,107 @@
                     <div class="stat-number">${stats.medications}</div>
                     <div class="stat-label">Medications</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.immunizations}</div>
+                    <div class="stat-label">Immunizations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.claims}</div>
+                    <div class="stat-label">Claims (EOB)</div>
+                </div>
             `;
         }
         
         function displayPatientInfo(patient) {
             const name = patient.name?.[0];
-            const fullName = name ? `${(name.given || []).join(' ')} ${name.family || ''}` : 'Name not available';
-            document.getElementById('content').innerHTML = `
+            const fullName = name ? 
+                `${(name.given || []).join(' ')} ${name.family || ''}` : 
+                'Name not available';
+            const birthDate = patient.birthDate || 'Not available';
+            const gender = patient.gender || 'Not specified';
+            
+            const html = `
                 <div class="section">
                     <h2>👤 Patient Information</h2>
                     <p><strong>Name:</strong> ${fullName}</p>
-                    <p><strong>ID:</strong> ${patient.id}</p>
-                    <p><strong>Birth Date:</strong> ${patient.birthDate || 'N/A'}</p>
+                    <p><strong>Date of Birth:</strong> ${birthDate}</p>
+                    <p><strong>Gender:</strong> ${gender}</p>
+                    <p><strong>Patient ID:</strong> ${patient.id}</p>
                 </div>
             `;
+            
+            document.getElementById('content').innerHTML = html;
         }
         
         function displayConditions(conditions) {
-            let html = '<div class="section"><h2>🩺 Conditions</h2>';
-            if (conditions?.length > 0) {
-                conditions.forEach(c => {
-                    const code = c.code?.text || c.code?.coding?.[0]?.display || 'Unknown';
-                    html += `<div class="resource-item"><strong>${code}</strong></div>`;
+            let html = '<div class="section"><h2>🩺 Medical Conditions</h2>';
+            
+            if (conditions && conditions.length > 0) {
+                conditions.forEach(condition => {
+                    const code = condition.code?.text || 
+                                condition.code?.coding?.[0]?.display || 
+                                'Unspecified condition';
+                    const status = condition.clinicalStatus?.coding?.[0]?.code || 'unknown';
+                    
+                    html += `
+                        <div class="resource-item">
+                            <strong>${code}</strong><br>
+                            <small>Status: ${status}</small>
+                        </div>
+                    `;
                 });
             } else {
                 html += '<p>No conditions found.</p>';
             }
+            
+            html += '</div>';
+            document.getElementById('content').innerHTML += html;
+        }
+        
+        function displayMedications(medications) {
+            let html = '<div class="section"><h2>💊 Medications</h2>';
+            
+            if (medications && medications.length > 0) {
+                medications.forEach(med => {
+                    const medName = med.medicationCodeableConcept?.text || 
+                                   med.medicationCodeableConcept?.coding?.[0]?.display ||
+                                   'Unknown medication';
+                    
+                    html += `
+                        <div class="resource-item">
+                            <strong>${medName}</strong>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<p>No medications found.</p>';
+            }
+            
+            html += '</div>';
+            document.getElementById('content').innerHTML += html;
+        }
+        
+        function displayImmunizations(immunizations) {
+            let html = '<div class="section"><h2>💉 Immunizations</h2>';
+            
+            if (immunizations && immunizations.length > 0) {
+                immunizations.forEach(imm => {
+                    const vaccine = imm.vaccineCode?.text || 
+                                   imm.vaccineCode?.coding?.[0]?.display ||
+                                   'Unknown vaccine';
+                    const date = imm.occurrenceDateTime || imm.date || 'Date not recorded';
+                    
+                    html += `
+                        <div class="resource-item">
+                            <strong>${vaccine}</strong><br>
+                            <small>Date: ${date}</small>
+                        </div>
+                    `;
+                });
+            } else {
+                html += '<p>No immunizations found.</p>';
+            }
+            
             html += '</div>';
             document.getElementById('content').innerHTML += html;
         }
