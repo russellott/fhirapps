@@ -15,7 +15,7 @@ const FHIR_SERVERS = {
     // Cigna FHIR Server
     cigna: {
         name: "Cigna Developer API",
-        clientId: "a780273e-86b1-4dee-8fe8-087780d1c316",
+        clientId: "REDACTED_CIGNA_P2P_CLIENT_ID",
         scope: "patient/*.read launch/patient openid fhirUser",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         iss: "https://fhir.cigna.com/PatientAccess/v1-devportal/",
