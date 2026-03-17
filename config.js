@@ -8,7 +8,7 @@ const FHIR_SERVERS = {
         name: "SMART Health IT Sandbox",
         clientId: "YOUR_SANDBOX_CLIENT_ID",
         clientSecret: null,
-        scope: "launch/patient patient/*.read openid fhirUser",
+        scope: "launch/patient patient/*.read openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
         iss: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/fhir",
@@ -20,16 +20,16 @@ const FHIR_SERVERS = {
         name: "Cigna Developer API",
         clientId: "REDACTED_CIGNA_P2P_CLIENT_ID",
         clientSecret: "REDACTED_CIGNA_P2P_CLIENT_SECRET",
-        scope: "patient/*.read launch/patient openid fhirUser",
+        // UPDATED: Added offline_access scope for refresh token
+        scope: "patient/*.read launch/patient openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
         iss: "https://fhir.cigna.com/PatientAccess/v1-devportal",
         authorizeUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/authorize",
         tokenUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/token",
         description: "Real payer FHIR API for CMS Patient Access",
-        // Cigna-specific requirements
-        requiresStateNonce: true, // Cigna needs state and nonce parameters
-        useNumericStateNonce: true // Cigna wants simple numeric values
+        requiresStateNonce: true,
+        useNumericStateNonce: true
     },
     
     // Anthem FHIR Server
@@ -37,7 +37,7 @@ const FHIR_SERVERS = {
         name: "Anthem FHIR API",
         clientId: "YOUR_ANTHEM_CLIENT_ID",
         clientSecret: "YOUR_ANTHEM_CLIENT_SECRET",
-        scope: "patient/*.read launch/patient openid fhirUser",
+        scope: "patient/*.read launch/patient openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
         iss: "https://fhir.anthem.com/fhir",
@@ -49,7 +49,7 @@ const FHIR_SERVERS = {
         name: "Logica Health Sandbox",
         clientId: "YOUR_LOGICA_CLIENT_ID",
         clientSecret: null,
-        scope: "launch/patient patient/*.read openid fhirUser",
+        scope: "launch/patient patient/*.read openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
         iss: "https://api.logicahealth.org/FHIRResearchSandbox/open/",

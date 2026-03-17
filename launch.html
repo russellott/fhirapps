@@ -37,10 +37,25 @@
         .detail-line {
             margin: 5px 0;
             font-family: monospace;
+            font-size: 12px;
         }
         .label {
             font-weight: bold;
             color: #0076ce;
+        }
+        .scope-badge {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 3px 8px;
+            border-radius: 3px;
+            margin: 2px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .scope-badge.offline {
+            background: #fff3e0;
+            color: #f57c00;
         }
         .error {
             background: #ffebee;
@@ -85,12 +100,10 @@
                 let state, nonce;
                 
                 if (config.useNumericStateNonce) {
-                    // Generate simple numeric values for Cigna
                     state = generateNumericToken(12);
                     nonce = generateNumericToken(12);
                     console.log('✓ Generated numeric state and nonce for Cigna');
                 } else {
-                    // Generate standard random strings
                     state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
                     nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
                     console.log('✓ Generated standard state and nonce');
@@ -98,6 +111,23 @@
                 
                 console.log('State:', state);
                 console.log('Nonce:', nonce);
+                
+                // Parse and display scopes with highlighting
+                const scopes = config.scope.split(' ');
+                const hasOfflineAccess = scopes.includes('offline_access');
+                const scopeBadges = scopes.map(scope => {
+                    const isOffline = scope === 'offline_access';
+                    return `<span class="scope-badge ${isOffline ? 'offline' : ''}">${scope}</span>`;
+                }).join(' ');
+                
+                console.log('=== Scopes Requested ===');
+                scopes.forEach(scope => {
+                    if (scope === 'offline_access') {
+                        console.log(`  ✓ ${scope} - Will request refresh token`);
+                    } else {
+                        console.log(`  • ${scope}`);
+                    }
+                });
                 
                 // Display launch info
                 document.getElementById('serverInfo').innerHTML = `
@@ -109,6 +139,16 @@
                     <div class="detail-line"><span class="label">Nonce:</span> ${nonce}</div>
                     <div class="detail-line"><span class="label">Authorize URL:</span> ${config.authorizeUrl || 'Auto-discovered'}</div>
                     <div class="detail-line"><span class="label">Token URL:</span> ${config.tokenUrl || 'Auto-discovered'}</div>
+                    <div class="detail-line" style="margin-top: 10px;">
+                        <span class="label">Scopes:</span><br>
+                        <div style="margin-top: 5px;">${scopeBadges}</div>
+                    </div>
+                    ${hasOfflineAccess ? `
+                    <div style="margin-top: 10px; padding: 10px; background: #fff3e0; border-radius: 4px; border-left: 3px solid #f57c00;">
+                        <strong style="color: #f57c00;">🔄 Refresh Token Requested</strong><br>
+                        <small style="color: #666;">The offline_access scope will request a refresh token for extended access.</small>
+                    </div>
+                    ` : ''}
                     <hr style="margin: 10px 0; border: none; border-top: 1px solid #ccc;">
                     <small style="color: #666;">Building authorization request...</small>
                 `;
@@ -116,14 +156,13 @@
                 // Build authorization parameters
                 const authParams = {
                     clientId: config.clientId,
-                    scope: config.scope,
+                    scope: config.scope,  // This now includes offline_access
                     redirectUri: config.redirectUri
                 };
                 
                 // Add state and nonce
                 authParams.state = state;
                 
-                // For OpenID Connect, nonce should be in scope or separate parameter
                 if (config.scope.includes('openid')) {
                     authParams.nonce = nonce;
                     console.log('✓ Including nonce for OpenID Connect flow');
@@ -159,8 +198,7 @@
                     clientSecret: authParams.clientSecret ? '***HIDDEN***' : 'not provided'
                 });
                 
-                // For Cigna, we need to manually build the authorize URL
-                // because fhir-client.js might not pass state/nonce correctly
+                // For Cigna, manually build the authorize URL
                 if (serverParam === 'cigna' || config.requiresStateNonce) {
                     console.log('=== Using Custom Authorization for Cigna ===');
                     
@@ -174,15 +212,15 @@
                         redirectUri: config.redirectUri,
                         state: state,
                         nonce: nonce,
-                        scope: config.scope
+                        scope: config.scope  // Includes offline_access
                     }));
                     
-                    // Build authorize URL manually
+                    // Build authorize URL manually with ALL scopes
                     const authorizeParams = new URLSearchParams({
                         response_type: 'code',
                         client_id: config.clientId,
                         redirect_uri: config.redirectUri,
-                        scope: config.scope,
+                        scope: config.scope,  // This includes offline_access
                         state: state,
                         nonce: nonce
                     });
@@ -198,14 +236,26 @@
                     console.log(authorizeUrl);
                     console.log('=== Parsed Parameters ===');
                     for (const [key, value] of authorizeParams.entries()) {
-                        console.log(`  ${key}: ${value}`);
+                        if (key === 'scope') {
+                            console.log(`  ${key}: ${value}`);
+                            console.log(`    → Includes offline_access: ${value.includes('offline_access')}`);
+                        } else {
+                            console.log(`  ${key}: ${value}`);
+                        }
+                    }
+                    
+                    // Verify offline_access is in the URL
+                    if (!authorizeUrl.includes('offline_access')) {
+                        console.error('⚠️ WARNING: offline_access NOT found in authorize URL!');
+                    } else {
+                        console.log('✓ Confirmed: offline_access scope is in authorize URL');
                     }
                     
                     // Add info to page
                     document.getElementById('serverInfo').innerHTML += `
-                        <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 4px;">
-                            <strong>🔐 Authorization URL Built</strong><br>
-                            <small style="font-size: 11px; word-break: break-all;">${authorizeUrl}</small>
+                        <div style="margin-top: 15px; padding: 10px; background: #e8f5e9; border-radius: 4px; border-left: 3px solid #4caf50;">
+                            <strong style="color: #2e7d32;">✓ Authorization URL Built</strong><br>
+                            <small style="font-size: 10px; word-break: break-all; color: #666;">${authorizeUrl}</small>
                         </div>
                     `;
                     
@@ -218,6 +268,7 @@
                 } else {
                     // Use standard FHIR client authorization for other servers
                     console.log('Using standard FHIR client authorization');
+                    console.log('Scope being sent:', authParams.scope);
                     
                     FHIR.oauth2.authorize(authParams).catch(function(error) {
                         console.error('Authorization failed:', error);
