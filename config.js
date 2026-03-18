@@ -47,7 +47,7 @@ const FHIR_SERVERS = {
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        iss: "https://fhir.epic.com/interconnect-fhir-oauth/",
+        iss: "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4",
         authorizeUrl: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize",
         tokenUrl: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token",
         description: "Real payer FHIR API for CMS Patient Access",
