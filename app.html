@@ -754,9 +754,9 @@
                 claims: 0
             };
 
-            // Intercept client.request to log full URLs
+            // Intercept client.request to log full URLs AND add CORS-friendly options
             const originalRequest = client.request.bind(client);
-            client.request = function (url, options) {
+            client.request = function (url, options = {}) {
                 // Extract the actual URL string from the url parameter
                 let urlString;
                 let urlObject = url;
@@ -791,8 +791,25 @@
                 console.log('Original URL param:', url);
                 console.log('Extracted URL string:', urlString);
                 console.log('Full URL:', fullUrl);
-                console.log('Options:', options);
+                console.log('Options (before CORS fix):', options);
                 console.log('Base URL:', client.state.serverUrl);
+
+                // ===== CORS FIX: Simplify headers to avoid preflight =====
+                if (!options.headers) {
+                    options.headers = {};
+                }
+
+                // Remove headers that trigger CORS preflight
+                delete options.headers['Accept'];
+                delete options.headers['Prefer'];
+
+                // Add referrer policy to suppress Referer header
+                options.referrerPolicy = 'no-referrer';
+
+                console.log('✓ CORS-friendly options applied');
+                console.log('Options (after CORS fix):', options);
+                addDebugLog('FHIR', '✓ Applied CORS-friendly request options');
+                // =========================================================
 
                 addDebugLog('FHIR', `Requesting: ${fullUrl}`);
 
