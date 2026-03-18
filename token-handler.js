@@ -53,7 +53,7 @@ const TokenHandler = {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'Accept': 'application/json'
+                    // Removed Accept header to avoid CORS preflight
                 },
                 body: bodyString,
                 referrerPolicy: 'no-referrer'  // Suppress Referer header to avoid CORS issues
