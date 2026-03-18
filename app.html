@@ -750,7 +750,7 @@
                 conditions: 0,
                 medications: 0,
                 immunizations: 0,
-                claims: 0
+                eobs: 0
             };
 
             const baseUrl = client.state.serverUrl;
@@ -838,6 +838,15 @@
                 stats.immunizations = immunizations.length;
                 displayImmunizations(immunizations);
 
+                // Fetch Explanation of Benefits (Claims/EOBs)
+                console.log(`\n=== Fetching Explanation of Benefits (EOBs) ===`);
+                const eobBundle = await fhirFetch(`ExplanationOfBenefit?patient=${patientId}`);
+                const eobs = eobBundle.entry ? eobBundle.entry.map(e => e.resource) : [];
+                console.log('✓ EOBs retrieved:', eobs);
+                addDebugLog('FHIR', `✓ Found ${eobs.length} explanation of benefits`);
+                stats.eobs = eobs.length;
+                displayEOBs(eobs);
+
                 displayStats(stats);
                 addDebugLog('SUCCESS', '✓ All patient data loaded successfully');
 
@@ -903,7 +912,7 @@
                     <div class="stat-label">Immunizations</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-number">${stats.claims}</div>
+                    <div class="stat-number">${stats.eobs}</div>
                     <div class="stat-label">Claims (EOB)</div>
                 </div>
             `;
@@ -995,6 +1004,70 @@
                 });
             } else {
                 html += '<p>No immunizations found.</p>';
+            }
+
+            html += '</div>';
+            document.getElementById('content').innerHTML += html;
+        }
+
+        function displayEOBs(eobs) {
+            let html = '<div class="section"><h2>💰 Explanation of Benefits (Claims)</h2>';
+
+            if (!eobs || eobs.length === 0) {
+                html += '<p>No explanation of benefits found.</p>';
+            } else {
+                eobs.forEach(eob => {
+                    // Extract claim type
+                    const claimType = eob.type?.coding?.[0]?.display ||
+                        eob.type?.text ||
+                        'Unknown Type';
+
+                    // Extract status
+                    const status = eob.status || 'Unknown';
+
+                    // Extract dates
+                    const created = eob.created ? new Date(eob.created).toLocaleDateString() : 'N/A';
+                    const billablePeriod = eob.billablePeriod?.start ?
+                        `${new Date(eob.billablePeriod.start).toLocaleDateString()}${eob.billablePeriod.end ? ' - ' + new Date(eob.billablePeriod.end).toLocaleDateString() : ''}` :
+                        'N/A';
+
+                    // Extract provider
+                    const provider = eob.provider?.display ||
+                        eob.provider?.reference ||
+                        'Unknown Provider';
+
+                    // Extract financial information
+                    const total = eob.total?.find(t => t.category?.coding?.[0]?.code === 'submitted')?.amount?.value ||
+                        eob.total?.[0]?.amount?.value ||
+                        null;
+                    const totalCurrency = eob.total?.find(t => t.category?.coding?.[0]?.code === 'submitted')?.amount?.currency ||
+                        eob.total?.[0]?.amount?.currency ||
+                        'USD';
+
+                    const payment = eob.payment?.amount?.value || null;
+                    const paymentCurrency = eob.payment?.amount?.currency || 'USD';
+
+                    // Extract outcome
+                    const outcome = eob.outcome || 'Unknown';
+
+                    // Count items
+                    const itemCount = eob.item?.length || 0;
+
+                    html += `
+                <div class="resource-item">
+                    <strong>${claimType}</strong> - <em>${status}</em><br>
+                    ${eob.id ? `<small>ID: ${eob.id}</small><br>` : ''}
+                    <small>Created: ${created}</small><br>
+                    ${billablePeriod !== 'N/A' ? `<small>Service Period: ${billablePeriod}</small><br>` : ''}
+                    <small>Provider: ${provider}</small><br>
+                    ${total !== null ? `<small>Total Submitted: ${totalCurrency} ${total.toFixed(2)}</small><br>` : ''}
+                    ${payment !== null ? `<small>Payment: ${paymentCurrency} ${payment.toFixed(2)}</small><br>` : ''}
+                    <small>Outcome: ${outcome}</small>
+                    ${itemCount > 0 ? ` | <small>Items: ${itemCount}</small>` : ''}
+                    ${eob.diagnosis?.length > 0 ? ` | <small>Diagnoses: ${eob.diagnosis.length}</small>` : ''}
+                </div>
+            `;
+                });
             }
 
             html += '</div>';
