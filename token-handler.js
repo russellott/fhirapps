@@ -52,8 +52,8 @@ const TokenHandler = {
             const response = await fetch(tokenUrl, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                    // Removed Accept header to avoid CORS preflight
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/russ'
                 },
                 body: bodyString,
                 referrerPolicy: 'no-referrer'  // Suppress Referer header to avoid CORS issues
