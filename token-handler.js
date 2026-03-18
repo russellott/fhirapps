@@ -7,7 +7,7 @@
 
 // Override FHIR client's token exchange for specific servers
 const TokenHandler = {
-    
+
     /**
      * Perform custom token exchange with explicit body formatting
      */
@@ -18,14 +18,14 @@ const TokenHandler = {
             ...params,
             client_secret: params.client_secret ? '***HIDDEN***' : 'not provided'
         });
-        
+
         // Build the request body exactly as Cigna expects
         const body = new URLSearchParams();
         body.append('grant_type', params.grant_type || 'authorization_code');
         body.append('code', params.code);
         body.append('redirect_uri', params.redirect_uri);
         body.append('client_id', params.client_id);
-        
+
         // CRITICAL: Add client_secret if provided
         if (params.client_secret) {
             body.append('client_secret', params.client_secret);
@@ -33,11 +33,11 @@ const TokenHandler = {
         } else {
             console.warn('⚠ client_secret NOT provided - may fail for confidential clients');
         }
-        
+
         // Log the exact body that will be sent
         const bodyString = body.toString();
         console.log('Request body (form-urlencoded):', bodyString);
-        
+
         // Log each parameter
         console.log('Body parameters:');
         for (const [key, value] of body.entries()) {
@@ -47,7 +47,7 @@ const TokenHandler = {
                 console.log(`  ${key}: ${value}`);
             }
         }
-        
+
         try {
             const response = await fetch(tokenUrl, {
                 method: 'POST',
@@ -55,12 +55,13 @@ const TokenHandler = {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'Accept': 'application/json'
                 },
-                body: bodyString
+                body: bodyString,
+                referrerPolicy: 'no-referrer'  // Suppress Referer header to avoid CORS issues
             });
-            
+
             console.log('Response status:', response.status);
             console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-            
+
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('Token exchange failed:', {
@@ -68,32 +69,32 @@ const TokenHandler = {
                     statusText: response.statusText,
                     body: errorText
                 });
-                
+
                 let errorData;
                 try {
                     errorData = JSON.parse(errorText);
                 } catch (e) {
                     errorData = { error: 'parse_error', error_description: errorText };
                 }
-                
+
                 throw new Error(`Token exchange failed: ${response.status} - ${errorData.error_description || errorData.error || errorText}`);
             }
-            
+
             const tokenData = await response.json();
             console.log('✓ Token exchange successful');
             console.log('Token response:', {
                 ...tokenData,
                 access_token: tokenData.access_token ? tokenData.access_token.substring(0, 20) + '...' : 'N/A'
             });
-            
+
             return tokenData;
-            
+
         } catch (error) {
             console.error('Token exchange error:', error);
             throw error;
         }
     },
-    
+
     /**
      * Check if a server needs custom token handling
      */
