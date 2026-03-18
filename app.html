@@ -838,12 +838,61 @@
                 stats.immunizations = immunizations.length;
                 displayImmunizations(immunizations);
 
-                // Fetch Explanation of Benefits (Claims/EOBs)
-                console.log(`\n=== Fetching Explanation of Benefits (EOBs) ===`);
-                const eobBundle = await fhirFetch(`ExplanationOfBenefit?patient=${patientId}`);
-                const eobs = eobBundle.entry ? eobBundle.entry.map(e => e.resource) : [];
-                console.log('✓ EOBs retrieved:', eobs);
-                addDebugLog('FHIR', `✓ Found ${eobs.length} explanation of benefits`);
+                // Fetch Explanation of Benefits (Claims/EOBs) with pagination
+                console.log(`\n=== Fetching Explanation of Benefits (EOBs) with Pagination ===`);
+                const eobs = [];
+                let nextUrl = `ExplanationOfBenefit?patient=${patientId}`;
+                let pageCount = 0;
+
+                while (nextUrl) {
+                    pageCount++;
+                    console.log(`\n📄 Fetching EOB page ${pageCount}...`);
+                    addDebugLog('FHIR', `Fetching EOB page ${pageCount}`);
+
+                    // Fetch current page
+                    const eobBundle = await fhirFetch(nextUrl);
+
+                    // Extract resources from this page
+                    if (eobBundle.entry && eobBundle.entry.length > 0) {
+                        const pageResources = eobBundle.entry.map(e => e.resource);
+                        eobs.push(...pageResources);
+                        console.log(`✓ Page ${pageCount}: Retrieved ${pageResources.length} EOBs (Total so far: ${eobs.length})`);
+                        addDebugLog('FHIR', `✓ Page ${pageCount}: ${pageResources.length} EOBs (Total: ${eobs.length})`);
+                    } else {
+                        console.log(`✓ Page ${pageCount}: No entries found`);
+                    }
+
+                    // Look for next page link
+                    nextUrl = null;
+                    if (eobBundle.link) {
+                        const nextLink = eobBundle.link.find(link => link.relation === 'next');
+                        if (nextLink && nextLink.url) {
+                            // Extract just the path and query from the full URL
+                            // The URL might be absolute, so we need to extract the resource path
+                            const fullNextUrl = nextLink.url;
+                            console.log(`🔗 Next page URL found: ${fullNextUrl}`);
+
+                            // Parse the URL to extract just the path after the base URL
+                            try {
+                                const nextUrlObj = new URL(fullNextUrl);
+                                // Extract path + query, removing leading slash if present
+                                nextUrl = nextUrlObj.pathname.replace(/^\//, '') + nextUrlObj.search;
+                                console.log(`📍 Parsed next page path: ${nextUrl}`);
+                                addDebugLog('FHIR', `Next page available: ${nextUrl}`);
+                            } catch (e) {
+                                // If URL parsing fails, it might already be a relative path
+                                nextUrl = fullNextUrl;
+                                console.log(`📍 Using next page URL as-is: ${nextUrl}`);
+                            }
+                        } else {
+                            console.log(`✓ No more pages - pagination complete`);
+                            addDebugLog('FHIR', `✓ EOB pagination complete: ${pageCount} pages, ${eobs.length} total resources`);
+                        }
+                    }
+                }
+
+                console.log(`\n✓ EOB pagination complete: Retrieved ${eobs.length} EOBs across ${pageCount} page(s)`);
+                addDebugLog('FHIR', `✓ Final EOB count: ${eobs.length} resources from ${pageCount} page(s)`);
                 stats.eobs = eobs.length;
                 displayEOBs(eobs);
 
