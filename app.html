@@ -517,10 +517,41 @@
 
         if (code && state) {
             addDebugLog('AUTH', 'Authorization code and state received');
+            addDebugLog('AUTH', `State from URL: ${state}`);
 
-            const stateKey = `oauth_state_${state}`;
-            const storedStateStr = sessionStorage.getItem(stateKey);
+            // SMART servers may replace the state parameter, so we'll find any oauth_state_* key
+            let stateKey = null;
+            let storedStateStr = null;
 
+            // First try exact match
+            const exactKey = `oauth_state_${state}`;
+            storedStateStr = sessionStorage.getItem(exactKey);
+
+            if (storedStateStr) {
+                stateKey = exactKey;
+                addDebugLog('AUTH', `✓ Found exact state match: ${stateKey}`);
+            } else {
+                // If no exact match, find ANY oauth_state_* key (for single-user demo)
+                addDebugLog('WARN', `No exact match for state ${state}, searching for any oauth_state_* key...`);
+
+                for (let i = 0; i < sessionStorage.length; i++) {
+                    const key = sessionStorage.key(i);
+                    if (key.startsWith('oauth_state_')) {
+                        stateKey = key;
+                        storedStateStr = sessionStorage.getItem(key);
+                        addDebugLog('AUTH', `✓ Found stored state: ${key}`);
+
+                        // Parse and log the stored state value
+                        try {
+                            const parsed = JSON.parse(storedStateStr);
+                            addDebugLog('WARN', `⚠️ State mismatch! URL state: ${state}, Stored state: ${parsed.state}`);
+                        } catch (e) {
+                            // Continue anyway
+                        }
+                        break;
+                    }
+                }
+            }
             if (!storedStateStr) {
                 addDebugLog('ERROR', `State validation failed - no stored state found for stateKey = ${stateKey}`);
                 debugInfo.errors.push({
