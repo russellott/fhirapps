@@ -1018,7 +1018,7 @@
             } else {
                 eobs.forEach(eob => {
                     // Extract claim type
-                    const claimType = eob.type?.coding?.[0]?.display ||
+                    const claimType = eob.type?.coding?.[0]?.code ||
                         eob.type?.text ||
                         'Unknown Type';
 
