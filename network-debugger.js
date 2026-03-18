@@ -6,33 +6,62 @@
 
 const NetworkDebugger = {
     requests: [],
-    
+
     /**
      * Initialize network debugging by intercepting fetch
      */
     init() {
         console.log('=== Network Debugger Initialized ===');
-        
+
         // Store original fetch
         const originalFetch = window.fetch;
-        
+
         // Override fetch to add debugging
-        window.fetch = async function(...args) {
+        window.fetch = async function (...args) {
             const requestId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
             const startTime = performance.now();
-            
+
             // Parse request details
             const url = typeof args[0] === 'string' ? args[0] : args[0].url;
             const options = args[1] || {};
             const method = options.method || 'GET';
-            
+
             console.log(`\n=== 🌐 Network Request [${requestId}] ===`);
             console.log(`Method: ${method}`);
             console.log(`URL: ${url}`);
-            
+
             // Log headers
             console.log('Headers:', options.headers || 'None');
-            
+
+            console.log('Headers:', options.headers || 'None');
+
+            // Add specific Origin/Referer checking
+            if (options.headers) {
+                const headers = new Headers(options.headers);
+                const authHeader = headers.get('Authorization');
+                const originHeader = headers.get('Origin');
+                const refererHeader = headers.get('Referer');
+
+                if (authHeader) {
+                    console.log(`✓ Authorization Header Present: ${authHeader.substring(0, 30)}...`);
+                } else {
+                    console.warn('⚠️ No Authorization Header Found!');
+                }
+
+                // Note: Origin and Referer are set by browser and can't be modified by JS
+                console.log('📍 Browser-Set Headers (for reference):');
+                console.log(`   Origin: ${document.location.origin} (browser will send this)`);
+                console.log(`   Referer: ${document.location.href} (browser will send this)`);
+
+            } else {
+                console.warn('⚠️ No Headers in Request!');
+            }
+
+            // Also log what the browser will automatically send
+            console.log('\n🌐 Automatic Browser Headers:');
+            console.log(`   Origin: ${window.location.origin}`);
+            console.log(`   Referer: ${window.location.href}`);
+
             // Check for Authorization header
             if (options.headers) {
                 const headers = new Headers(options.headers);
@@ -45,12 +74,12 @@ const NetworkDebugger = {
             } else {
                 console.warn('⚠️ No Headers in Request!');
             }
-            
+
             // Log body if present
             if (options.body) {
                 console.log('Request Body:', options.body);
             }
-            
+
             const requestLog = {
                 id: requestId,
                 method: method,
@@ -65,34 +94,34 @@ const NetworkDebugger = {
                 error: null,
                 duration: null
             };
-            
+
             try {
                 // Make the actual request
                 const response = await originalFetch(...args);
                 const endTime = performance.now();
                 const duration = Math.round(endTime - startTime);
-                
+
                 console.log(`\n=== 📥 Network Response [${requestId}] ===`);
                 console.log(`Status: ${response.status} ${response.statusText}`);
                 console.log(`Duration: ${duration}ms`);
                 console.log(`OK: ${response.ok}`);
-                
+
                 // Log response headers
                 console.log('Response Headers:');
                 response.headers.forEach((value, key) => {
                     console.log(`  ${key}: ${value}`);
                 });
-                
+
                 // Clone response to read body without consuming it
                 const clonedResponse = response.clone();
-                
+
                 // Try to read response body
                 let responseBody = null;
                 let responseText = null;
                 try {
                     responseText = await clonedResponse.text();
                     console.log('Response Body (first 500 chars):', responseText.substring(0, 500));
-                    
+
                     // Try to parse as JSON
                     try {
                         responseBody = JSON.parse(responseText);
@@ -104,7 +133,7 @@ const NetworkDebugger = {
                 } catch (e) {
                     console.error('Could not read response body:', e);
                 }
-                
+
                 // Update request log
                 requestLog.status = response.status;
                 requestLog.statusText = response.statusText;
@@ -112,13 +141,13 @@ const NetworkDebugger = {
                 requestLog.responseHeaders = Object.fromEntries(response.headers.entries());
                 requestLog.responseBody = responseBody;
                 requestLog.duration = duration;
-                
+
                 NetworkDebugger.requests.push(requestLog);
-                
+
                 // Check for common issues
                 if (!response.ok) {
                     console.error(`❌ Request Failed: ${response.status} ${response.statusText}`);
-                    
+
                     if (response.status === 401) {
                         console.error('🔐 Authorization Error - Token may be invalid or expired');
                     } else if (response.status === 403) {
@@ -129,19 +158,19 @@ const NetworkDebugger = {
                         console.error('🌐 Network Error - This might be a CORS issue');
                     }
                 }
-                
+
                 return response;
-                
+
             } catch (error) {
                 const endTime = performance.now();
                 const duration = Math.round(endTime - startTime);
-                
+
                 console.error(`\n=== ❌ Network Error [${requestId}] ===`);
                 console.error(`Error: ${error.message}`);
                 console.error(`Error Type: ${error.name}`);
                 console.error(`Duration: ${duration}ms`);
                 console.error('Full Error:', error);
-                
+
                 // Diagnose common network errors
                 if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed')) {
                     console.error('\n🔍 Possible Causes:');
@@ -152,7 +181,7 @@ const NetworkDebugger = {
                     console.error('  5. SSL/TLS certificate issues');
                     console.error('\n💡 Check the browser Network tab for more details');
                 }
-                
+
                 // Update request log
                 requestLog.error = {
                     message: error.message,
@@ -160,31 +189,31 @@ const NetworkDebugger = {
                     stack: error.stack
                 };
                 requestLog.duration = duration;
-                
+
                 NetworkDebugger.requests.push(requestLog);
-                
+
                 // Re-throw the error
                 throw error;
             }
         };
-        
+
         console.log('✓ Fetch interceptor installed');
     },
-    
+
     /**
      * Get all logged requests
      */
     getRequests() {
         return this.requests;
     },
-    
+
     /**
      * Get failed requests only
      */
     getFailedRequests() {
         return this.requests.filter(r => r.error || !r.ok);
     },
-    
+
     /**
      * Clear request log
      */
@@ -192,7 +221,7 @@ const NetworkDebugger = {
         this.requests = [];
         console.log('Network debug log cleared');
     },
-    
+
     /**
      * Export debug data
      */
