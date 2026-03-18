@@ -39,16 +39,22 @@ const FHIR_SERVERS = {
         expectedOrigin: GITHUB_ORIGIN  // https://russellott.github.io
     },
 
-    // Anthem FHIR Server
-    anthem: {
-        name: "Anthem FHIR API",
-        clientId: "YOUR_ANTHEM_CLIENT_ID",
-        clientSecret: "YOUR_ANTHEM_CLIENT_SECRET",
+    // EPIC Sandbox FHIR Server
+    epic: {
+        name: "Epic Sandbox FHIR API",
+        clientId: "cc878f20-a7f0-41d5-83e3-4962cd59d9f3",
+        clientSecret: "REDACTED_EPIC_CLIENT_SECRET",
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        iss: "https://fhir.anthem.com/fhir",
-        description: "Anthem's CMS-compliant Patient Access API",
+        iss: "https://fhir.epic.com/interconnect-fhir-oauth/",
+        authorizeUrl: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize",
+        tokenUrl: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token",
+        description: "Real payer FHIR API for CMS Patient Access",
+        requiresStateNonce: true,
+        useNumericStateNonce: true,
+        // Expected Origin header (browser will send this automatically)
+        description: "Epic's CMS-compliant Patient Access API",
         expectedOrigin: GITHUB_ORIGIN
     },
 
