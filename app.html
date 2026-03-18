@@ -240,7 +240,7 @@
         <p>Real-World SMART on FHIR Implementation with Full Debugging</p>
     </div>
 
-    <div class="debug-panel" id="debugPanel">
+    <div class="debug-panel collapsed" id="debugPanel">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
             <h2 style="margin: 0; color: #ffd54f;">🔍 OAuth & Network Debug Console</h2>
             <div>
@@ -272,7 +272,7 @@
             errors: []
         };
 
-        let debugVisible = true;
+        let debugVisible = false;
 
         function addDebugLog(category, message, data = null) {
             const timestamp = new Date().toISOString();
