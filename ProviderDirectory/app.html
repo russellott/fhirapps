@@ -907,16 +907,20 @@
                         ((practitioner.name?.[0]?.given?.join(' ') || '') + ' ' + (practitioner.name?.[0]?.family || '')).trim() ||
                         'Unknown';
                     const gender = practitioner.gender || 'Not specified';
-                    const birthDate = practitioner.birthDate || 'Not available';
+                    const npi = practitioner.identifier?.find(id => id.system === 'http://hl7.org/fhir/sid/us-npi')?.value;
                     const phone = practitioner.telecom?.find(t => t.system === 'phone')?.value;
                     const email = practitioner.telecom?.find(t => t.system === 'email')?.value;
+                    const languages = practitioner.communication
+                        ?.map(c => c.text || c.language?.text || c.language?.coding?.[0]?.display)
+                        .filter(l => l);
 
                     html += `<div class="modal-item">`;
                     html += `<strong>Name:</strong> ${name}<br>`;
                     html += `<strong>Gender:</strong> ${gender}<br>`;
-                    html += `<strong>Birth Date:</strong> ${birthDate}<br>`;
+                    if (npi) html += `<strong>NPI:</strong> ${npi}<br>`;
                     if (phone) html += `<strong>Phone:</strong> ${phone}<br>`;
                     if (email) html += `<strong>Email:</strong> ${email}<br>`;
+                    if (languages && languages.length > 0) html += `<strong>Languages Spoken:</strong> ${languages.join(', ')}<br>`;
                     html += `<strong>ID:</strong> ${practitioner.id}<br>`;
                     html += `</div>`;
 
