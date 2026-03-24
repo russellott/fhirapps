@@ -44,7 +44,7 @@ const FHIR_SERVERS = {
     // EPIC Sandbox FHIR Server
     epic: {
         name: "Epic Sandbox FHIR API",
-        clientId: "cc878f20-a7f0-41d5-83e3-4962cd59d9f3",
+        clientId: "REDACTED_EPIC_CLIENT_ID",
         clientSecret: "REDACTED_EPIC_CLIENT_SECRET",
         usePkce: true,
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
