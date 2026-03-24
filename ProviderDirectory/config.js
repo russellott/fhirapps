@@ -11,7 +11,7 @@ const PROVIDER_DIRECTORIES = {
         baseUrl: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/fhir",
         description: "Public testing sandbox with sample provider data (R4, AUTO simulation)",
         searchResources: true,
-        supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole"],
+        supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole", "HealthcareService"],
         isPublic: true
     },
 
@@ -31,9 +31,29 @@ const PROVIDER_DIRECTORIES = {
         baseUrl: "https://wa.fhir.mhbapp.com/pd/api/v1",
         description: "Washington State Health Care Authority - ProviderOne Directory",
         searchResources: true,
-        supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole"],
+        supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole", "HealthcareService"],
+        isPublic: true
+    },
+
+    bcbsmn: {
+        name: "Blue Cross Blue Shield of Minnesota",
+        baseUrl: "https://preview-api.bluecrossmn.com/fhir/provider",
+        description: "Blue Cross Blue Shield of Minnesota - Provider Directory",
+        searchResources: true,
+        supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole", "HealthcareService"],
+        isPublic: true
+    },
+    
+    humana: {
+        name: "Humana",
+        baseUrl: "https://fhir.humana.com/api",
+        description: "Humana - Provider Directory",
+        searchResources: true,
+        supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole", "HealthcareService"],
         isPublic: true
     }
+
+
 };
 
 // Set which directory to use by default
