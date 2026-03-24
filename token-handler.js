@@ -16,12 +16,12 @@ const TokenHandler = {
         }
     },
 
-    async executeTokenRequest(tokenUrl, bodyString, headers) {
+    async executeTokenRequest(tokenUrl, bodyString, headers, referrerPolicy = 'strict-origin-when-cross-origin') {
         return fetch(tokenUrl, {
             method: 'POST',
             headers,
             body: bodyString,
-            referrerPolicy: 'no-referrer'
+            referrerPolicy
         });
     },
 
@@ -38,7 +38,11 @@ const TokenHandler = {
         });
 
         const tokenAuthMethod = params.token_auth_method || (params.code_verifier ? 'none' : 'client_secret_post');
+        const tokenReferrerPolicy = params.token_referrer_policy || 'strict-origin-when-cross-origin';
+        const allowBasicAuthFallback = params.allow_basic_auth_fallback !== false;
         console.log('Token auth method:', tokenAuthMethod);
+        console.log('Token referrer policy:', tokenReferrerPolicy);
+        console.log('Allow basic-auth fallback:', allowBasicAuthFallback);
         if (params.server_key) {
             console.log('Server key:', params.server_key);
         }
@@ -93,7 +97,7 @@ const TokenHandler = {
                 console.log('✓ Using client_secret_basic Authorization header');
             }
 
-            let response = await this.executeTokenRequest(tokenUrl, bodyString, headers);
+            let response = await this.executeTokenRequest(tokenUrl, bodyString, headers, tokenReferrerPolicy);
 
             console.log('Response status:', response.status);
             console.log('Response headers:', Object.fromEntries(response.headers.entries()));
@@ -116,7 +120,8 @@ const TokenHandler = {
                 if (
                     response.status === 400 &&
                     (errorData.error === 'invalid_client' || `${errorData.error_description || ''}`.toLowerCase().includes('client')) &&
-                    params.client_secret
+                    params.client_secret &&
+                    allowBasicAuthFallback
                 ) {
                     const fallbackMethod = tokenAuthMethod === 'client_secret_basic' ? 'client_secret_post' : 'client_secret_basic';
                     console.warn(`⚠ invalid_client with ${tokenAuthMethod}; retrying once with ${fallbackMethod}`);
@@ -142,7 +147,7 @@ const TokenHandler = {
                         fallbackBody.append('code_verifier', params.code_verifier);
                     }
 
-                    response = await this.executeTokenRequest(tokenUrl, fallbackBody.toString(), fallbackHeaders);
+                    response = await this.executeTokenRequest(tokenUrl, fallbackBody.toString(), fallbackHeaders, tokenReferrerPolicy);
                     console.log('Fallback response status:', response.status);
 
                     if (response.ok) {
@@ -164,6 +169,17 @@ const TokenHandler = {
                     });
                     throw new Error(
                         `Token exchange failed: ${response.status} - ${fallbackText || 'invalid_client'} (tried ${tokenAuthMethod} then ${fallbackMethod})`
+                    );
+                }
+
+                if (
+                    response.status === 400 &&
+                    (errorData.error === 'invalid_client' || `${errorData.error_description || ''}`.toLowerCase().includes('client')) &&
+                    params.client_secret &&
+                    !allowBasicAuthFallback
+                ) {
+                    throw new Error(
+                        `Token exchange failed: ${response.status} - ${errorData.error_description || errorData.error || errorText} (basic-auth fallback disabled)`
                     );
                 }
 

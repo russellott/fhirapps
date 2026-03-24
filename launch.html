@@ -267,6 +267,8 @@
                     clientSecret: usePkce ? null : config.clientSecret,
                     tokenUri: config.tokenUrl,
                     tokenAuthMethod: config.tokenAuthMethod || (usePkce ? 'none' : 'client_secret_post'),
+                    tokenReferrerPolicy: config.tokenReferrerPolicy || 'strict-origin-when-cross-origin',
+                    allowBasicAuthFallback: config.allowBasicAuthFallback !== false,
                     redirectUri: config.redirectUri,
                     state: state,
                     nonce: nonce,
