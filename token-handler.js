@@ -16,7 +16,8 @@ const TokenHandler = {
         console.log('Token URL:', tokenUrl);
         console.log('Parameters:', {
             ...params,
-            client_secret: params.client_secret ? '***HIDDEN***' : 'not provided'
+            client_secret: params.client_secret ? '***HIDDEN***' : 'not provided',
+            code_verifier: params.code_verifier ? '***PROVIDED***' : 'not provided'
         });
 
         // Build the request body exactly as Cigna expects
@@ -30,8 +31,16 @@ const TokenHandler = {
         if (params.client_secret) {
             body.append('client_secret', params.client_secret);
             console.log('✓ client_secret added to request body');
-        } else {
-            console.warn('⚠ client_secret NOT provided - may fail for confidential clients');
+        }
+
+        // PKCE: Add code_verifier when using public-client auth
+        if (params.code_verifier) {
+            body.append('code_verifier', params.code_verifier);
+            console.log('✓ code_verifier added to request body for PKCE flow');
+        }
+
+        if (!params.client_secret && !params.code_verifier) {
+            console.warn('⚠ Neither client_secret nor code_verifier provided - token exchange may fail');
         }
 
         // Log the exact body that will be sent
@@ -43,6 +52,8 @@ const TokenHandler = {
         for (const [key, value] of body.entries()) {
             if (key === 'client_secret') {
                 console.log(`  ${key}: ***HIDDEN*** (length: ${value.length})`);
+            } else if (key === 'code_verifier') {
+                console.log(`  ${key}: ***PROVIDED*** (length: ${value.length})`);
             } else {
                 console.log(`  ${key}: ${value}`);
             }

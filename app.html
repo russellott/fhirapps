@@ -569,6 +569,7 @@
                     state: state,
                     nonce: clientState.nonce,
                     clientId: clientState.clientId,
+                    usePkce: !!clientState.usePkce,
                     hasSecret: !!clientState.clientSecret,
                     serverUrl: clientState.serverUrl,
                     tokenUri: clientState.tokenUri
@@ -582,7 +583,12 @@
                     client_id: clientState.clientId
                 };
 
-                if (clientState.clientSecret) {
+                if (clientState.usePkce && clientState.codeVerifier) {
+                    tokenParams.code_verifier = clientState.codeVerifier;
+                    addDebugLog('TOKEN', '✓ Including code_verifier for PKCE token exchange');
+                }
+
+                if (!clientState.usePkce && clientState.clientSecret) {
                     tokenParams.client_secret = clientState.clientSecret;
                     addDebugLog('TOKEN', '✓ Including client_secret in token exchange');
                 }
@@ -592,7 +598,9 @@
                     code: tokenParams.code,
                     redirect_uri: tokenParams.redirect_uri,
                     client_id: tokenParams.client_id,
-                    client_secret: tokenParams.client_secret ? '***PROVIDED***' : 'NOT PROVIDED'
+                    client_secret: tokenParams.client_secret ? '***PROVIDED***' : 'NOT PROVIDED',
+                    code_verifier: tokenParams.code_verifier ? '***PROVIDED***' : 'NOT PROVIDED',
+                    auth_mode: clientState.usePkce ? 'PKCE' : 'CLIENT_SECRET'
                 };
 
                 debugInfo.tokenRequest = {
@@ -663,7 +671,7 @@
                 };
 
                 // If client secret exists, include it for potential refresh
-                if (clientState.clientSecret) {
+                if (!clientState.usePkce && clientState.clientSecret) {
                     fullClientState.clientSecret = clientState.clientSecret;
                     addDebugLog('FHIR', '✓ Client secret included for token refresh capability');
                 }

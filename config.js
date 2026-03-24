@@ -10,6 +10,7 @@ const FHIR_SERVERS = {
         name: "SMART Health IT Sandbox",
         clientId: "demo_app_whatever",
         clientSecret: null,
+        usePkce: true,
         scope: "launch/patient patient/*.read openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,  // https://russellott.github.io/demosmartapp/app.html
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
@@ -25,6 +26,7 @@ const FHIR_SERVERS = {
         name: "Cigna Developer API",
         clientId: "REDACTED_CIGNA_P2P_CLIENT_ID",
         clientSecret: "REDACTED_CIGNA_P2P_CLIENT_SECRET",
+        usePkce: false,
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         // CRITICAL: These must EXACTLY match what's registered in Cigna Developer Portal
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,  // https://russellott.github.io/demosmartapp/app.html
@@ -44,6 +46,7 @@ const FHIR_SERVERS = {
         name: "Epic Sandbox FHIR API",
         clientId: "cc878f20-a7f0-41d5-83e3-4962cd59d9f3",
         clientSecret: "REDACTED_EPIC_CLIENT_SECRET",
+        usePkce: true,
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
@@ -63,6 +66,7 @@ const FHIR_SERVERS = {
         name: "Logica Health Sandbox",
         clientId: "demo_app_logica",
         clientSecret: null,
+        usePkce: true,
         scope: "launch/patient patient/*.read openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,

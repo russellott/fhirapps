@@ -478,14 +478,17 @@
             const hasSecret = server.clientSecret &&
                 server.clientSecret !== 'YOUR_CLIENT_SECRET' &&
                 server.clientSecret !== 'YOUR_' + key.toUpperCase() + '_CLIENT_SECRET';
+            const usePkce = !!server.usePkce;
 
             const statusBadge = isConfigured ?
                 '<span class="status-badge configured">✓ Ready</span>' :
                 '<span class="status-badge setup-required">⚙ Setup</span>';
 
-            const clientType = hasSecret ?
-                '<span style="font-size: 11px; color: #4caf50;">🔐 Confidential Client</span>' :
-                '<span style="font-size: 11px; color: #ff9800;">📱 Public Client</span>';
+            const clientType = usePkce ?
+                '<span style="font-size: 11px; color: #2e7d32;">🛡️ PKCE Flow</span>' :
+                (hasSecret ?
+                    '<span style="font-size: 11px; color: #4caf50;">🔐 Client Secret Flow</span>' :
+                    '<span style="font-size: 11px; color: #ff9800;">📱 Public Client (No Secret)</span>');
 
             card.innerHTML = `
         <div class="radio-indicator"></div>
@@ -507,6 +510,12 @@
                     <span class="server-detail-icon">🔑</span>
                     <span>Client ID configured</span>
                 </div>
+                ${usePkce ? `
+                <div class="server-detail">
+                    <span class="server-detail-icon">🛡️</span>
+                    <span>PKCE enabled</span>
+                </div>
+                ` : ''}
                 ${hasSecret ? `
                 <div class="server-detail">
                     <span class="server-detail-icon">🔐</span>
