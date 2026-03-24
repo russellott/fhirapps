@@ -261,10 +261,12 @@
                 // Store state in sessionStorage for ALL servers
                 const stateKey = `oauth_state_${state}`;
                 const stateData = {
+                    serverKey: serverParam,
                     serverUrl: iss,
                     clientId: config.clientId,
                     clientSecret: usePkce ? null : config.clientSecret,
                     tokenUri: config.tokenUrl,
+                    tokenAuthMethod: config.tokenAuthMethod || (usePkce ? 'none' : 'client_secret_post'),
                     redirectUri: config.redirectUri,
                     state: state,
                     nonce: nonce,

@@ -8,6 +8,23 @@
 // Override FHIR client's token exchange for specific servers
 const TokenHandler = {
 
+    toBase64(str) {
+        try {
+            return btoa(str);
+        } catch (e) {
+            return btoa(unescape(encodeURIComponent(str)));
+        }
+    },
+
+    async executeTokenRequest(tokenUrl, bodyString, headers) {
+        return fetch(tokenUrl, {
+            method: 'POST',
+            headers,
+            body: bodyString,
+            referrerPolicy: 'no-referrer'
+        });
+    },
+
     /**
      * Perform custom token exchange with explicit body formatting
      */
@@ -20,6 +37,12 @@ const TokenHandler = {
             code_verifier: params.code_verifier ? '***PROVIDED***' : 'not provided'
         });
 
+        const tokenAuthMethod = params.token_auth_method || (params.code_verifier ? 'none' : 'client_secret_post');
+        console.log('Token auth method:', tokenAuthMethod);
+        if (params.server_key) {
+            console.log('Server key:', params.server_key);
+        }
+
         // Build the request body exactly as Cigna expects
         const body = new URLSearchParams();
         body.append('grant_type', params.grant_type || 'authorization_code');
@@ -27,8 +50,8 @@ const TokenHandler = {
         body.append('redirect_uri', params.redirect_uri);
         body.append('client_id', params.client_id);
 
-        // CRITICAL: Add client_secret if provided
-        if (params.client_secret) {
+        // client_secret_post: include secret in request body
+        if (tokenAuthMethod === 'client_secret_post' && params.client_secret) {
             body.append('client_secret', params.client_secret);
             console.log('✓ client_secret added to request body');
         }
@@ -60,15 +83,17 @@ const TokenHandler = {
         }
 
         try {
-            const response = await fetch(tokenUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded'
-                    // Removed Accept header to avoid CORS preflight
-                },
-                body: bodyString,
-                referrerPolicy: 'no-referrer'  // Suppress Referer header to avoid CORS issues
-            });
+            const headers = {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            };
+
+            if (tokenAuthMethod === 'client_secret_basic' && params.client_secret) {
+                const basic = this.toBase64(`${params.client_id}:${params.client_secret}`);
+                headers['Authorization'] = `Basic ${basic}`;
+                console.log('✓ Using client_secret_basic Authorization header');
+            }
+
+            let response = await this.executeTokenRequest(tokenUrl, bodyString, headers);
 
             console.log('Response status:', response.status);
             console.log('Response headers:', Object.fromEntries(response.headers.entries()));
@@ -86,6 +111,60 @@ const TokenHandler = {
                     errorData = JSON.parse(errorText);
                 } catch (e) {
                     errorData = { error: 'parse_error', error_description: errorText };
+                }
+
+                if (
+                    response.status === 400 &&
+                    (errorData.error === 'invalid_client' || `${errorData.error_description || ''}`.toLowerCase().includes('client')) &&
+                    params.client_secret
+                ) {
+                    const fallbackMethod = tokenAuthMethod === 'client_secret_basic' ? 'client_secret_post' : 'client_secret_basic';
+                    console.warn(`⚠ invalid_client with ${tokenAuthMethod}; retrying once with ${fallbackMethod}`);
+
+                    const fallbackBody = new URLSearchParams();
+                    fallbackBody.append('grant_type', params.grant_type || 'authorization_code');
+                    fallbackBody.append('code', params.code);
+                    fallbackBody.append('redirect_uri', params.redirect_uri);
+                    fallbackBody.append('client_id', params.client_id);
+
+                    const fallbackHeaders = {
+                        'Content-Type': 'application/x-www-form-urlencoded'
+                    };
+
+                    if (fallbackMethod === 'client_secret_post') {
+                        fallbackBody.append('client_secret', params.client_secret);
+                    } else {
+                        const basic = this.toBase64(`${params.client_id}:${params.client_secret}`);
+                        fallbackHeaders['Authorization'] = `Basic ${basic}`;
+                    }
+
+                    if (params.code_verifier) {
+                        fallbackBody.append('code_verifier', params.code_verifier);
+                    }
+
+                    response = await this.executeTokenRequest(tokenUrl, fallbackBody.toString(), fallbackHeaders);
+                    console.log('Fallback response status:', response.status);
+
+                    if (response.ok) {
+                        console.log(`✓ Fallback token auth succeeded with ${fallbackMethod}`);
+                        const tokenData = await response.json();
+                        console.log('Token response:', {
+                            ...tokenData,
+                            access_token: tokenData.access_token ? tokenData.access_token.substring(0, 20) + '...' : 'N/A'
+                        });
+                        return tokenData;
+                    }
+
+                    const fallbackText = await response.text();
+                    console.error('Fallback token exchange failed:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        body: fallbackText,
+                        attemptedMethod: fallbackMethod
+                    });
+                    throw new Error(
+                        `Token exchange failed: ${response.status} - ${fallbackText || 'invalid_client'} (tried ${tokenAuthMethod} then ${fallbackMethod})`
+                    );
                 }
 
                 throw new Error(`Token exchange failed: ${response.status} - ${errorData.error_description || errorData.error || errorText}`);

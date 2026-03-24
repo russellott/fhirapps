@@ -568,9 +568,11 @@
                 debugInfo.authState = {
                     state: state,
                     nonce: clientState.nonce,
+                    serverKey: clientState.serverKey,
                     clientId: clientState.clientId,
                     usePkce: !!clientState.usePkce,
                     hasSecret: !!clientState.clientSecret,
+                    tokenAuthMethod: clientState.tokenAuthMethod || (clientState.usePkce ? 'none' : 'client_secret_post'),
                     serverUrl: clientState.serverUrl,
                     tokenUri: clientState.tokenUri
                 };
@@ -580,7 +582,9 @@
                     grant_type: 'authorization_code',
                     code: code,
                     redirect_uri: clientState.redirectUri,
-                    client_id: clientState.clientId
+                    client_id: clientState.clientId,
+                    token_auth_method: clientState.tokenAuthMethod || (clientState.usePkce ? 'none' : 'client_secret_post'),
+                    server_key: clientState.serverKey || null
                 };
 
                 if (clientState.usePkce && clientState.codeVerifier) {
@@ -598,6 +602,7 @@
                     code: tokenParams.code,
                     redirect_uri: tokenParams.redirect_uri,
                     client_id: tokenParams.client_id,
+                    token_auth_method: tokenParams.token_auth_method,
                     client_secret: tokenParams.client_secret ? '***PROVIDED***' : 'NOT PROVIDED',
                     code_verifier: tokenParams.code_verifier ? '***PROVIDED***' : 'NOT PROVIDED',
                     auth_mode: clientState.usePkce ? 'PKCE' : 'CLIENT_SECRET'

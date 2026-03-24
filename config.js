@@ -27,6 +27,7 @@ const FHIR_SERVERS = {
         clientId: "REDACTED_CIGNA_P2P_CLIENT_ID",
         clientSecret: "REDACTED_CIGNA_P2P_CLIENT_SECRET",
         usePkce: false,
+        tokenAuthMethod: "client_secret_basic",
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         // CRITICAL: These must EXACTLY match what's registered in Cigna Developer Portal
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,  // https://russellott.github.io/demosmartapp/app.html
@@ -47,6 +48,7 @@ const FHIR_SERVERS = {
         clientId: "REDACTED_EPIC_CLIENT_ID",
         clientSecret: "REDACTED_EPIC_CLIENT_SECRET",
         usePkce: true,
+        tokenAuthMethod: "none",
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
