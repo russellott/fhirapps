@@ -337,6 +337,22 @@
             font-size: 12px;
             font-weight: 600;
         }
+
+        .launcher-link {
+            margin-top: 16px;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        .launcher-link a {
+            color: #0076ce;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .launcher-link a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 
@@ -396,6 +412,10 @@
                 <button class="btn btn-primary" id="browseBtn" onclick="browseDirectory()" disabled>
                     <span id="browseBtnText">Select a Directory</span>
                 </button>
+            </div>
+
+            <div class="launcher-link">
+                <a href="../index.html">← Back to App Launcher</a>
             </div>
         </div>
     </div>
