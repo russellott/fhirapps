@@ -15,21 +15,21 @@ const PROVIDER_DIRECTORIES = {
         isPublic: true
     },
 
-    // Logica Health Open Sandbox Provider Directory
-    logica_open: {
-        name: "Logica Health Open Sandbox",
-        baseUrl: "https://api.logicahealth.org/FHIRResearchSandbox/open/fhir",
-        description: "Advanced testing sandbox with comprehensive provider directory data",
+    // California Mental Health Services Authority Provider Directory (public, no auth required)
+    calmhsa: {
+        name: "California Mental Health Services Authority",
+        baseUrl: "https://fhir-calmhsa-provider.ehn-prod.net/fhir",
+        description: "Production Provider Directory for California Mental Health Services Authority (CalMHSA)",
         searchResources: true,
         supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole", "HealthcareService"],
         isPublic: true
     },
 
-    // FHIR Test Server (public, generic FHIR server)
-    fhir_test: {
-        name: "FHIR Test Server (Hapi)",
-        baseUrl: "http://hapi.fhir.org/baseR4",
-        description: "Public HAPI FHIR test server with provider directory resources",
+    // Washington State Health Care Authority Provider Directory (public, no auth required)
+    wshca: {
+        name: "Washington State Health Care Authority",
+        baseUrl: "https://wa.fhir.mhbapp.com/pd/api/v1",
+        description: "Washington State Health Care Authority - ProviderOne Directory",
         searchResources: true,
         supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole"],
         isPublic: true
