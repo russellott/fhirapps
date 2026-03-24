@@ -48,7 +48,7 @@ const FHIR_SERVERS = {
     epic: {
         name: "Epic Sandbox FHIR API",
         clientId: "REDACTED_EPIC_CLIENT_ID",
-        clientSecret: "KkOsSDhCRfSm9UuuB13HLm25miCYqHJjR0RDpymHuvXWziBYdowM0pY2Y/D9Ybu7EAfesD0MnmuA7XdoV2Ah1A==",
+        clientSecret: "REDACTED_EPIC_CLIENT_SECRET",
         usePkce: true,
         tokenAuthMethod: "none",
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
