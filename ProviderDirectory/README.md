@@ -52,19 +52,19 @@ This app uses the FHIR R4 (Release 4) standard for querying provider directory d
 
 ```
 # Get all practitioners
-GET {baseUrl}/Practitioner?_count=100
+GET {baseUrl}/Practitioner
 
 # Get all organizations
-GET {baseUrl}/Organization?_count=100
+GET {baseUrl}/Organization
 
 # Get all locations
-GET {baseUrl}/Location?_count=100
+GET {baseUrl}/Location
 
 # Search for practitioners by name
-GET {baseUrl}/Practitioner?name=smith&_count=100
+GET {baseUrl}/Practitioner?name=smith
 
 # Get all healthcare services
-GET {baseUrl}/HealthcareService?_count=100
+GET {baseUrl}/HealthcareService
 ```
 
 ## Debug Console

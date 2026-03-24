@@ -684,7 +684,7 @@
         }
 
         async function fetchResourceBundle(resourceType, baseUrl, searchParams = {}) {
-            const params = new URLSearchParams({ _count: '100' });
+            const params = new URLSearchParams();
             Object.entries(searchParams).forEach(([key, value]) => {
                 if (value !== null && value !== undefined && value !== '') {
                     params.set(key, value);
