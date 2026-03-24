@@ -181,6 +181,13 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
+        .search-controls {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            align-items: center;
+        }
+
         .search-box input {
             width: 100%;
             padding: 12px;
@@ -193,6 +200,31 @@
             outline: none;
             border-color: #004a8f;
             box-shadow: 0 0 8px rgba(0, 118, 206, 0.3);
+        }
+
+        .search-btn {
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #0076ce 0%, #004a8f 100%);
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 118, 206, 0.25);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(0, 118, 206, 0.3);
+        }
+
+        .search-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
 
         .back-btn {
@@ -433,7 +465,10 @@
     </div>
 
     <div class="search-box">
-        <input type="text" id="searchInput" placeholder="🔍 Search providers by name, specialty, or organization..." onkeyup="filterResources()">
+        <div class="search-controls">
+            <input type="text" id="searchInput" placeholder="🔍 Enter practitioner name to search the FHIR directory..." onkeydown="handleSearchKey(event)">
+            <button id="searchBtn" class="search-btn" onclick="searchPractitioners()">Search</button>
+        </div>
     </div>
 
     <div class="debug-panel collapsed" id="debugPanel">
@@ -445,8 +480,8 @@
 
     <div id="stats" class="stats"></div>
     <div id="content" class="loading">
-        <h2>⏳ Loading provider directory data...</h2>
-        <p>Fetching data from FHIR provider directory endpoint...</p>
+        <h2>🔎 Search for Practitioners</h2>
+        <p>Enter a practitioner name above, then click Search to retrieve matching records from the selected FHIR directory.</p>
     </div>
 
     <!-- Practitioner Details Modal -->
@@ -484,6 +519,16 @@
         };
 
         let currentDirectory = null;
+
+        function resetResourceCache() {
+            allResources = {
+                practitioners: [],
+                organizations: [],
+                locations: [],
+                healthcareServices: [],
+                practitionerRoles: []
+            };
+        }
 
         function addDebugLog(category, message, data = null) {
             const timestamp = new Date().toISOString();
@@ -559,41 +604,9 @@
             content.innerHTML = html || '<p style="color: #999;">No debug logs yet...</p>';
         }
 
-        function filterResources() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const contentDiv = document.getElementById('content');
-
-            if (!searchTerm) {
-                // Show all results
-                displayAllResults();
-                return;
-            }
-
-            // Filter and display
-            let filteredCount = 0;
-            const sections = document.querySelectorAll('.section');
-
-            sections.forEach(section => {
-                const items = section.querySelectorAll('.resource-item');
-                let visibleCount = 0;
-
-                items.forEach(item => {
-                    const text = item.textContent.toLowerCase();
-                    if (text.includes(searchTerm)) {
-                        item.style.display = 'block';
-                        visibleCount++;
-                        filteredCount++;
-                    } else {
-                        item.style.display = 'none';
-                    }
-                });
-
-                section.style.display = visibleCount > 0 ? 'block' : 'none';
-            });
-
-            // Show message if no results
-            if (filteredCount === 0) {
-                contentDiv.innerHTML = `<div class="no-data">📭 No providers found matching "${searchTerm}"</div>`;
+        function handleSearchKey(event) {
+            if (event.key === 'Enter') {
+                searchPractitioners();
             }
         }
 
@@ -626,84 +639,8 @@
                 html += '</div>';
             }
 
-            // Organizations
-            if (allResources.organizations.length > 0) {
-                html += '<div class="section"><h2>🏢 Organizations (' + allResources.organizations.length + ')</h2>';
-                allResources.organizations.forEach(o => {
-                    const name = o.name || 'Unknown Organization';
-                    const type = o.type?.[0]?.text || o.type?.[0]?.coding?.[0]?.display || '';
-
-                    html += `
-                        <div class="resource-item">
-                            <strong>${name}</strong><br>
-                            ${type ? `Type: ${type}<br>` : ''}
-                            <small style="color: #999;">ID: ${o.id}</small>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-            }
-
-            // Locations
-            if (allResources.locations.length > 0) {
-                html += '<div class="section"><h2>📍 Locations (' + allResources.locations.length + ')</h2>';
-                allResources.locations.forEach(l => {
-                    const name = l.name || 'Unknown Location';
-                    const address = l.address?.text || 'No address available';
-
-                    html += `
-                        <div class="resource-item">
-                            <strong>${name}</strong><br>
-                            <small>${address}</small><br>
-                            <small style="color: #999;">ID: ${l.id}</small>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-            }
-
-            // Healthcare Services
-            if (allResources.healthcareServices.length > 0) {
-                html += '<div class="section"><h2>💊 Healthcare Services (' + allResources.healthcareServices.length + ')</h2>';
-                allResources.healthcareServices.forEach(hs => {
-                    const name = hs.name || 'Unknown Service';
-                    const specialty = hs.specialty?.map(s =>
-                        s.coding?.[0]?.display || s.text || ''
-                    ).filter(s => s).join(', ');
-
-                    html += `
-                        <div class="resource-item">
-                            <strong>${name}</strong><br>
-                            ${specialty ? `Specialty: ${specialty}<br>` : ''}
-                            <small style="color: #999;">ID: ${hs.id}</small>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-            }
-
-            // Practitioner Roles
-            if (allResources.practitionerRoles.length > 0) {
-                html += '<div class="section"><h2>👔 Practitioner Roles (' + allResources.practitionerRoles.length + ')</h2>';
-                allResources.practitionerRoles.forEach(pr => {
-                    const role = pr.code?.map(c => c.coding?.[0]?.display || c.text || '').filter(r => r).join(', ');
-                    const specialty = pr.specialty?.map(s =>
-                        s.coding?.[0]?.display || s.text || ''
-                    ).filter(s => s).join(', ');
-
-                    html += `
-                        <div class="resource-item">
-                            ${role ? `<strong>${role}</strong><br>` : ''}
-                            ${specialty ? `Specialty: ${specialty}<br>` : ''}
-                            <small style="color: #999;">ID: ${pr.id}</small>
-                        </div>
-                    `;
-                });
-                html += '</div>';
-            }
-
             if (!html) {
-                html = '<div class="no-data">📭 No provider data available</div>';
+                html = '<div class="no-data">📭 No matching practitioners found</div>';
             }
 
             contentDiv.innerHTML = html;
@@ -721,29 +658,36 @@
             document.getElementById('stats').innerHTML = `
                 <div class="stat-card">
                     <div class="stat-number">${stats.practitioners}</div>
-                    <div class="stat-label">Practitioners</div>
+                    <div class="stat-label">Matches</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">${stats.organizations}</div>
-                    <div class="stat-label">Organizations</div>
+                    <div class="stat-label">Cached Orgs</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">${stats.locations}</div>
-                    <div class="stat-label">Locations</div>
+                    <div class="stat-label">Cached Locations</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">${stats.services}</div>
-                    <div class="stat-label">Services</div>
+                    <div class="stat-label">Cached Services</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number">${stats.roles}</div>
-                    <div class="stat-label">Roles</div>
+                    <div class="stat-label">Cached Roles</div>
                 </div>
             `;
         }
 
-        async function fetchResourceBundle(resourceType, baseUrl) {
-            const url = `${baseUrl}/${resourceType}?_count=100`;
+        async function fetchResourceBundle(resourceType, baseUrl, searchParams = {}) {
+            const params = new URLSearchParams({ _count: '100' });
+            Object.entries(searchParams).forEach(([key, value]) => {
+                if (value !== null && value !== undefined && value !== '') {
+                    params.set(key, value);
+                }
+            });
+
+            const url = `${baseUrl}/${resourceType}?${params.toString()}`;
 
             const startTime = performance.now();
             addDebugLog('API', `Fetching ${resourceType}...`, { url });
@@ -799,10 +743,142 @@
             }
         }
 
+        async function fetchResourceByReference(reference) {
+            if (!reference || !currentDirectory?.baseUrl) {
+                return null;
+            }
+
+            const [resourceType, resourceId] = reference.split('/');
+            if (!resourceType || !resourceId) {
+                return null;
+            }
+
+            const cacheMap = {
+                Organization: 'organizations',
+                Location: 'locations',
+                HealthcareService: 'healthcareServices',
+                PractitionerRole: 'practitionerRoles',
+                Practitioner: 'practitioners'
+            };
+
+            const cacheKey = cacheMap[resourceType];
+            if (cacheKey) {
+                const cached = allResources[cacheKey].find(item => item.id === resourceId);
+                if (cached) {
+                    return cached;
+                }
+            }
+
+            const url = `${currentDirectory.baseUrl}/${resourceType}/${resourceId}`;
+            const startTime = performance.now();
+            addDebugLog('API', `Fetching ${resourceType}/${resourceId}...`, { url });
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/fhir+json'
+                    },
+                    referrerPolicy: 'no-referrer'
+                });
+
+                const duration = Math.round(performance.now() - startTime);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const resource = await response.json();
+                debugInfo.apiRequests.push({
+                    url,
+                    ok: true,
+                    status: response.status,
+                    duration,
+                    resourceType,
+                    count: 1
+                });
+
+                if (cacheKey && !allResources[cacheKey].some(item => item.id === resource.id)) {
+                    allResources[cacheKey].push(resource);
+                }
+
+                return resource;
+            } catch (error) {
+                const duration = Math.round(performance.now() - startTime);
+                debugInfo.apiRequests.push({
+                    url,
+                    ok: false,
+                    status: 'Error',
+                    duration,
+                    error: error.message
+                });
+                addDebugLog('ERROR', `Failed to fetch ${resourceType}/${resourceId}: ${error.message}`);
+                return null;
+            }
+        }
+
+        async function searchPractitioners() {
+            const searchInput = document.getElementById('searchInput');
+            const searchBtn = document.getElementById('searchBtn');
+            const searchTerm = searchInput.value.trim();
+            const contentDiv = document.getElementById('content');
+
+            if (!searchTerm) {
+                contentDiv.innerHTML = '<div class="no-data">⚠ Please enter a practitioner name before searching.</div>';
+                searchInput.focus();
+                return;
+            }
+
+            if (!currentDirectory) {
+                contentDiv.innerHTML = '<div class="error"><strong>Error:</strong> No provider directory selected.</div>';
+                return;
+            }
+
+            resetResourceCache();
+            displayStats();
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Searching...';
+            contentDiv.className = 'loading';
+            contentDiv.innerHTML = `
+                <h2>⏳ Searching Practitioners...</h2>
+                <p>Searching ${currentDirectory.name} for "${searchTerm}"</p>
+            `;
+
+            addDebugLog('SEARCH', `Searching practitioners for: ${searchTerm}`, { directory: currentDirectory.name });
+
+            try {
+                const practitioners = await fetchResourceBundle('Practitioner', currentDirectory.baseUrl, { name: searchTerm });
+                allResources.practitioners = practitioners;
+                displayAllResults();
+                displayStats();
+                contentDiv.className = '';
+
+                if (practitioners.length === 0) {
+                    contentDiv.innerHTML = `<div class="no-data">📭 No practitioners found matching "${searchTerm}"</div>`;
+                }
+
+                addDebugLog('SUCCESS', `Found ${practitioners.length} practitioner match(es)`, { searchTerm });
+            } catch (error) {
+                addDebugLog('ERROR', `Search failed: ${error.message}`);
+                contentDiv.className = '';
+                contentDiv.innerHTML = `<div class="error"><strong>Search Error:</strong> ${error.message}</div>`;
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.textContent = 'Search';
+                updateDebugPanel();
+            }
+        }
+
         function showPractitionerDetails(practitionerId, practitionerName) {
             const modal = document.getElementById('practitionerModal');
             modal.classList.add('show');
             document.getElementById('modalTitle').textContent = `👨‍⚕️ ${practitionerName}`;
+            document.getElementById('modalBody').innerHTML = `
+                <div class="modal-loading">
+                    <div class="modal-spinner"></div>
+                    <p>Loading practitioner details...</p>
+                </div>
+            `;
             loadPractitionerDetails(practitionerId, practitionerName);
         }
 
@@ -854,16 +930,23 @@
                 }
 
                 // Find related PractitionerRoles
-                const relatedRoles = allResources.practitionerRoles.filter(pr => 
+                let relatedRoles = allResources.practitionerRoles.filter(pr => 
                     pr.practitioner?.reference?.includes(practitionerId) ||
                     pr.practitioner?.display?.includes(practitionerName)
                 );
+
+                if (relatedRoles.length === 0 && currentDirectory?.supportedResources?.includes('PractitionerRole')) {
+                    relatedRoles = await fetchResourceBundle('PractitionerRole', currentDirectory.baseUrl, {
+                        practitioner: practitionerId
+                    });
+                    allResources.practitionerRoles = relatedRoles;
+                }
 
                 if (relatedRoles.length > 0) {
                     html += '<div class="modal-section">';
                     html += `<h3>👔 Practitioner Roles (${relatedRoles.length})</h3>`;
                     
-                    relatedRoles.forEach(role => {
+                    for (const role of relatedRoles) {
                         html += '<div class="modal-item">';
                         
                         const roleCode = role.code?.map(c => c.coding?.[0]?.display || c.text || '').filter(r => r).join(', ');
@@ -876,8 +959,7 @@
 
                         let organizationHtml = '';
                         if (role.organization?.reference) {
-                            const orgId = role.organization.reference.split('/').pop();
-                            const organization = allResources.organizations.find(o => o.id === orgId);
+                            const organization = await fetchResourceByReference(role.organization.reference);
                             if (organization) {
                                 const orgType = organization.type?.map(t =>
                                     t.coding?.[0]?.display || t.text || ''
@@ -899,9 +981,8 @@
 
                         let locationCards = [];
                         if (role.location && role.location.length > 0) {
-                            role.location.forEach(loc => {
-                                const locId = loc.reference?.split('/').pop();
-                                const location = allResources.locations.find(l => l.id === locId);
+                            for (const loc of role.location) {
+                                const location = await fetchResourceByReference(loc.reference);
                                 if (location) {
                                     const address = location.address?.text || [
                                         ...(location.address?.line || []),
@@ -924,7 +1005,7 @@
                                         </div>
                                     `);
                                 }
-                            });
+                            }
                         }
 
                         if (organizationHtml) {
@@ -940,18 +1021,17 @@
                         // Get related Healthcare Service
                         if (role.healthcareService && role.healthcareService.length > 0) {
                             html += `<strong>Healthcare Service(s):</strong><br>`;
-                            role.healthcareService.forEach(hs => {
-                                const hsId = hs.reference?.split('/').pop();
-                                const service = allResources.healthcareServices.find(s => s.id === hsId);
+                            for (const hs of role.healthcareService) {
+                                const service = await fetchResourceByReference(hs.reference);
                                 if (service) {
                                     html += `• ${service.name}<br>`;
                                 }
-                            });
+                            }
                         }
 
                         html += `<strong style="display: block; margin-top: 8px; color: #999; font-size: 12px;">Role ID: ${role.id}</strong>`;
                         html += '</div>';
-                    });
+                    }
                     html += '</div>';
                 } else {
                     html += '<div class="modal-section"><h3>👔 Practitioner Roles</h3><p style="color: #999;">No roles found for this practitioner</p></div>';
@@ -975,7 +1055,7 @@
         }
 
         async function loadProviderDirectory() {
-            addDebugLog('INIT', 'Starting provider directory load...');
+            addDebugLog('INIT', 'Initializing provider directory browser...');
 
             const urlParams = new URLSearchParams(window.location.search);
             const directoryKey = urlParams.get('directory') || ACTIVE_DIRECTORY;
@@ -988,48 +1068,11 @@
                 return;
             }
 
-            document.getElementById('headerSubtitle').textContent = `Browsing: ${directory.name} (click on any practitioner to see their roles and details)`;
-            addDebugLog('DIR', `Loading directory: ${directory.name}`, { baseUrl: directory.baseUrl });
+            document.getElementById('headerSubtitle').textContent = `Browsing: ${directory.name} (search by practitioner name to retrieve results)`;
+            addDebugLog('DIR', `Selected directory: ${directory.name}`, { baseUrl: directory.baseUrl });
 
-            try {
-                // Fetch all supported resource types
-                const resourceTypes = ['Practitioner', 'Organization', 'Location', 'HealthcareService', 'PractitionerRole'];
-
-                for (const resourceType of resourceTypes) {
-                    if (!directory.supportedResources || directory.supportedResources.includes(resourceType)) {
-                        const resources = await fetchResourceBundle(resourceType, directory.baseUrl);
-
-                        // Store by type
-                        switch (resourceType) {
-                            case 'Practitioner':
-                                allResources.practitioners = resources;
-                                break;
-                            case 'Organization':
-                                allResources.organizations = resources;
-                                break;
-                            case 'Location':
-                                allResources.locations = resources;
-                                break;
-                            case 'HealthcareService':
-                                allResources.healthcareServices = resources;
-                                break;
-                            case 'PractitionerRole':
-                                allResources.practitionerRoles = resources;
-                                break;
-                        }
-                    }
-                }
-
-                displayAllResults();
-                displayStats();
-                addDebugLog('SUCCESS', '✓ All provider directory data loaded successfully');
-
-            } catch (error) {
-                addDebugLog('ERROR', `Directory load error: ${error.message}`);
-                document.getElementById('content').innerHTML =
-                    `<div class="error"><strong>Error Loading Directory:</strong> ${error.message}<br><br>Check the debug panel for more details.</div>`;
-            }
-
+            resetResourceCache();
+            displayStats();
             updateDebugPanel();
         }
 
