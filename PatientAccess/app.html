@@ -667,8 +667,15 @@
                 addDebugLog('FHIR', 'FHIR client library loaded');
 
                 // Build complete client state with all OAuth information
+                // Resolve the FHIR base URL: prefer config.fhirBaseUrl (from config.js),
+                // then the value stored during launch, as a final fallback.
+                const serverKey = clientState.serverKey;
+                const serverConfig = serverKey && typeof FHIR_SERVERS !== 'undefined' ? FHIR_SERVERS[serverKey] : null;
+                const resolvedServerUrl = (serverConfig && serverConfig.fhirBaseUrl) || clientState.serverUrl;
+                console.log('Resolved FHIR base URL:', resolvedServerUrl, '(config fhirBaseUrl:', serverConfig?.fhirBaseUrl, ', stored serverUrl:', clientState.serverUrl, ')');
+
                 const fullClientState = {
-                    serverUrl: clientState.serverUrl,  // CRITICAL: This must be the FHIR base URL
+                    serverUrl: resolvedServerUrl,  // CRITICAL: This must be the FHIR base URL
                     clientId: clientState.clientId,
                     scope: clientState.scope,
                     redirectUri: clientState.redirectUri,
@@ -777,9 +784,16 @@
 
             const baseUrl = client.state.serverUrl;
             const accessToken = client.state.tokenResponse.access_token;
-            const patientId = client.state.tokenResponse.patient;
+            let patientId = client.state.tokenResponse.patient;
 
             console.log('Patient ID from token:', patientId);
+
+            // If the token response did not include a patient ID,
+            // try to discover it by searching for patients.
+            if (!patientId) {
+                console.warn('⚠ No patient ID in token response — will search for patients');
+                addDebugLog('WARN', 'No patient ID in token response — searching...');
+            }
 
             // Helper function for FHIR requests
             async function fhirFetch(resourcePath) {
@@ -826,6 +840,19 @@
             }
 
             try {
+                // If no patient ID, search for one
+                if (!patientId) {
+                    console.log('\n=== Searching for Patient ===');
+                    const searchBundle = await fhirFetch('Patient?_count=1');
+                    if (searchBundle.entry && searchBundle.entry.length > 0) {
+                        patientId = searchBundle.entry[0].resource.id;
+                        console.log('✓ Found patient via search:', patientId);
+                        addDebugLog('FHIR', `✓ Discovered patient ID: ${patientId}`);
+                    } else {
+                        throw new Error('No patients found on this FHIR server');
+                    }
+                }
+
                 // Fetch Patient
                 console.log('\n=== Starting Patient Data Fetch ===');
                 const patient = await fhirFetch(`Patient/${patientId}`);
