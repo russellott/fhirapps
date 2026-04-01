@@ -52,7 +52,7 @@ const FHIR_SERVERS = {
         clientSecret: null,
         usePkce: true,
         tokenAuthMethod: "client_secret_post",
-        tokenReferrerPolicy: "origin",
+        tokenReferrerPolicy: "no-referrer",
         allowBasicAuthFallback: false,
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         // CRITICAL: These must EXACTLY match what's registered in Cigna Developer Portal
