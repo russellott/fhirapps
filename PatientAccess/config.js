@@ -15,7 +15,7 @@ const FHIR_SERVERS = {
         tokenAuthMethod: "client_secret_post",
         tokenReferrerPolicy: "origin",
         allowBasicAuthFallback: false,
-        scope: "patient/patient.read",
+        scope: "patient/Patient.read",
         // CRITICAL: These must EXACTLY match what's registered in Cigna Developer Portal
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,  // https://russellott.github.io/demosmartapp/app.html
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,  // https://russellott.github.io/demosmartapp/launch.html
