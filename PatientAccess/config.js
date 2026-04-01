@@ -23,10 +23,12 @@ const FHIR_SERVERS = {
         // CRITICAL: These must EXACTLY match what's registered with the FHIR server
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        // Use the Keycloak realm-specific ISS and endpoints (support CORS)
+        // Keycloak realm ISS (used for OAuth authorize / token endpoints)
         iss: "https://deloitte.connectathons.com/realms/demo",
         authorizeUrl: "https://deloitte.connectathons.com/realms/demo/protocol/openid-connect/auth",
         tokenUrl: "https://deloitte.connectathons.com/realms/demo/protocol/openid-connect/token",
+        // FHIR base URL — the actual data endpoint (different from the Keycloak ISS)
+        fhirBaseUrl: "https://deloitte.connectathons.com",
         // Enable OIDC auto-discovery as fallback (will fetch .well-known/openid-configuration)
         useOidcDiscovery: true,
         // Route token exchange through CORS proxy (server does not send Access-Control-Allow-Origin)

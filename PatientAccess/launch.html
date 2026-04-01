@@ -305,7 +305,7 @@
                 const stateKey = `oauth_state_${state}`;
                 const stateData = {
                     serverKey: serverParam,
-                    serverUrl: iss,
+                    serverUrl: config.fhirBaseUrl || iss,
                     clientId: config.clientId,
                     clientSecret: usePkce ? null : config.clientSecret,
                     tokenUri: effectiveTokenUrl,
