@@ -16,7 +16,7 @@ const TokenHandler = {
         }
     },
 
-    async executeTokenRequest(tokenUrl, bodyString, headers, referrerPolicy = 'strict-origin-when-cross-origin') {
+    async executeTokenRequest(tokenUrl, bodyString, headers, referrerPolicy = 'origin') {
         return fetch(tokenUrl, {
             method: 'POST',
             headers,
@@ -38,7 +38,7 @@ const TokenHandler = {
         });
 
         const tokenAuthMethod = params.token_auth_method || (params.code_verifier ? 'none' : 'client_secret_post');
-        const tokenReferrerPolicy = params.token_referrer_policy || 'strict-origin-when-cross-origin';
+        const tokenReferrerPolicy = params.token_referrer_policy || 'origin';
         const allowBasicAuthFallback = params.allow_basic_auth_fallback !== false;
         console.log('Token auth method:', tokenAuthMethod);
         console.log('Token referrer policy:', tokenReferrerPolicy);

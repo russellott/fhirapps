@@ -4,6 +4,7 @@
 
 <head>
     <title>Patient Access Demo - Debug Mode</title>
+    <meta name="referrer" content="origin">
     <script src="config.js"></script>
     <script src="token-handler.js"></script>
     <script src="network-debugger.js"></script>
@@ -573,7 +574,7 @@
                     usePkce: !!clientState.usePkce,
                     hasSecret: !!clientState.clientSecret,
                     tokenAuthMethod: clientState.tokenAuthMethod || (clientState.usePkce ? 'none' : 'client_secret_post'),
-                    tokenReferrerPolicy: clientState.tokenReferrerPolicy || 'strict-origin-when-cross-origin',
+                    tokenReferrerPolicy: clientState.tokenReferrerPolicy || 'origin',
                     allowBasicAuthFallback: clientState.allowBasicAuthFallback !== false,
                     serverUrl: clientState.serverUrl,
                     tokenUri: clientState.tokenUri
@@ -587,7 +588,7 @@
                     client_id: clientState.clientId,
                     token_auth_method: clientState.tokenAuthMethod || (clientState.usePkce ? 'none' : 'client_secret_post'),
                     server_key: clientState.serverKey || null,
-                    token_referrer_policy: clientState.tokenReferrerPolicy || 'strict-origin-when-cross-origin',
+                    token_referrer_policy: clientState.tokenReferrerPolicy || 'origin',
                     allow_basic_auth_fallback: clientState.allowBasicAuthFallback !== false
                 };
 

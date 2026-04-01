@@ -3,6 +3,7 @@
 <html>
 <head>
     <title>SMART App Launch</title>
+    <meta name="referrer" content="origin">
     <script src="https://cdn.jsdelivr.net/npm/fhirclient@2.5.2/build/fhir-client.min.js"></script>
     <script src="config.js"></script>
     <style>
@@ -267,7 +268,7 @@
                     clientSecret: usePkce ? null : config.clientSecret,
                     tokenUri: config.tokenUrl,
                     tokenAuthMethod: config.tokenAuthMethod || (usePkce ? 'none' : 'client_secret_post'),
-                    tokenReferrerPolicy: config.tokenReferrerPolicy || 'strict-origin-when-cross-origin',
+                    tokenReferrerPolicy: config.tokenReferrerPolicy || 'origin',
                     allowBasicAuthFallback: config.allowBasicAuthFallback !== false,
                     redirectUri: config.redirectUri,
                     state: state,
