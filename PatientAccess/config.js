@@ -6,22 +6,25 @@ const GITHUB_ORIGIN = "https://russellott.github.io";  // Origin header will be 
 
 const FHIR_SERVERS = {
 
-    // HealthInteractive public test server
+    // HealthInteractive public test server (Keycloak realm: demo)
     deloitte: {
         name: "Deloitte HealthInteractive Server",
         clientId: "sharedClient2",
         clientSecret: "REDACTED_DELOITTE_DEMO_CLIENT_SECRET",
         usePkce: false,
         tokenAuthMethod: "client_secret_post",
-        tokenReferrerPolicy: "origin",
+        tokenReferrerPolicy: "no-referrer",
         allowBasicAuthFallback: false,
         scope: "patient/Patient.read",
-        // CRITICAL: These must EXACTLY match what's registered in Cigna Developer Portal
-        redirectUri: `${GITHUB_PAGES_URL}/app.html`,  // https://russellott.github.io/demosmartapp/app.html
-        launchUri: `${GITHUB_PAGES_URL}/launch.html`,  // https://russellott.github.io/demosmartapp/launch.html
-        iss: "https://deloitte.connectathons.com/",
-        authorizeUrl: "https://deloitte.connectathons.com/auth",
-        tokenUrl: "https://deloitte.connectathons.com/token",
+        // CRITICAL: These must EXACTLY match what's registered with the FHIR server
+        redirectUri: `${GITHUB_PAGES_URL}/app.html`,
+        launchUri: `${GITHUB_PAGES_URL}/launch.html`,
+        // Use the Keycloak realm-specific ISS and endpoints (support CORS)
+        iss: "https://deloitte.connectathons.com/realms/demo",
+        authorizeUrl: "https://deloitte.connectathons.com/realms/demo/protocol/openid-connect/auth",
+        tokenUrl: "https://deloitte.connectathons.com/realms/demo/protocol/openid-connect/token",
+        // Enable OIDC auto-discovery as fallback (will fetch .well-known/openid-configuration)
+        useOidcDiscovery: true,
         description: "Deloitte connectathon sandbox server with sample patients (R4)",
         requiresStateNonce: true,
         useNumericStateNonce: true,

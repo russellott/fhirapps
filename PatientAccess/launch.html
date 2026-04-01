@@ -111,6 +111,35 @@
                 codeChallengeMethod: 'S256'
             };
         }
+
+        /**
+         * OIDC Auto-Discovery: fetch .well-known/openid-configuration
+         * to obtain the correct authorize and token endpoints.
+         * Keycloak realm endpoints typically support CORS when Web Origins
+         * are configured, while front-end proxies may strip CORS headers.
+         */
+        async function discoverOidcEndpoints(issUrl) {
+            // Normalise: strip trailing slash then append well-known path
+            const base = issUrl.replace(/\/+$/, '');
+            const wellKnownUrl = `${base}/.well-known/openid-configuration`;
+            console.log('=== OIDC Discovery ===');
+            console.log('Fetching:', wellKnownUrl);
+            try {
+                const resp = await fetch(wellKnownUrl);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const meta = await resp.json();
+                console.log('✓ Discovery successful');
+                console.log('  authorization_endpoint:', meta.authorization_endpoint);
+                console.log('  token_endpoint:', meta.token_endpoint);
+                return {
+                    authorizeUrl: meta.authorization_endpoint,
+                    tokenUrl: meta.token_endpoint
+                };
+            } catch (err) {
+                console.warn('⚠ OIDC discovery failed, falling back to config values:', err.message);
+                return null;
+            }
+        }
         
         const urlParams = new URLSearchParams(window.location.search);
         const serverParam = urlParams.get('server') || ACTIVE_SERVER;
@@ -162,6 +191,19 @@
                     pkce = await generatePkcePair();
                     console.log('✓ PKCE enabled for this server');
                     console.log('Code challenge method:', pkce.codeChallengeMethod);
+                }
+
+                // --- OIDC auto-discovery (overrides config endpoints if successful) ---
+                let effectiveAuthorizeUrl = config.authorizeUrl;
+                let effectiveTokenUrl = config.tokenUrl;
+
+                if (config.useOidcDiscovery && iss) {
+                    const discovered = await discoverOidcEndpoints(iss);
+                    if (discovered) {
+                        effectiveAuthorizeUrl = discovered.authorizeUrl;
+                        effectiveTokenUrl = discovered.tokenUrl;
+                        console.log('✓ Using discovered endpoints (CORS-friendly)');
+                    }
                 }
                 
                 // Parse and display scopes with highlighting
@@ -244,12 +286,12 @@
                     authParams.launch = launch;
                 }
                 
-                if (config.authorizeUrl) {
-                    authParams.authorizeUri = config.authorizeUrl;
+                if (effectiveAuthorizeUrl) {
+                    authParams.authorizeUri = effectiveAuthorizeUrl;
                 }
                 
-                if (config.tokenUrl) {
-                    authParams.tokenUri = config.tokenUrl;
+                if (effectiveTokenUrl) {
+                    authParams.tokenUri = effectiveTokenUrl;
                 }
                 
                 console.log('=== Authorization Parameters ===');
@@ -266,7 +308,7 @@
                     serverUrl: iss,
                     clientId: config.clientId,
                     clientSecret: usePkce ? null : config.clientSecret,
-                    tokenUri: config.tokenUrl,
+                    tokenUri: effectiveTokenUrl,
                     tokenAuthMethod: config.tokenAuthMethod || (usePkce ? 'none' : 'client_secret_post'),
                     tokenReferrerPolicy: config.tokenReferrerPolicy || 'origin',
                     allowBasicAuthFallback: config.allowBasicAuthFallback !== false,
@@ -283,7 +325,7 @@
                 console.log('✓ State saved to sessionStorage:', stateKey);
                 
                 // For servers with custom OAuth endpoints (like Cigna), build URL manually
-                if (config.authorizeUrl && config.tokenUrl) {
+                if (effectiveAuthorizeUrl && effectiveTokenUrl) {
                     console.log('=== Using Custom Authorization Endpoints ===');
                     
                     // Build authorize URL manually with ALL required parameters
@@ -312,7 +354,7 @@
                         authorizeParams.append('launch', launch);
                     }
                     
-                    const authorizeUrl = `${config.authorizeUrl}?${authorizeParams.toString()}`;
+                    const authorizeUrl = `${effectiveAuthorizeUrl}?${authorizeParams.toString()}`;
                     
                     console.log('=== Authorize URL ===');
                     console.log(authorizeUrl);
