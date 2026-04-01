@@ -19,7 +19,7 @@ const FHIR_SERVERS = {
         tokenAuthMethod: "client_secret_post",
         tokenReferrerPolicy: "no-referrer",
         allowBasicAuthFallback: false,
-        scope: "patient/Patient.read",
+        scope: "patient/*.read",
         // CRITICAL: These must EXACTLY match what's registered with the FHIR server
         redirectUri: `${GITHUB_PAGES_URL}/app.html`,
         launchUri: `${GITHUB_PAGES_URL}/launch.html`,
