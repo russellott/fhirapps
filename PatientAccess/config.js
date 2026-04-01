@@ -5,6 +5,30 @@ const GITHUB_PAGES_URL = "https://russellott.github.io/fhirapps/PatientAccess";
 const GITHUB_ORIGIN = "https://russellott.github.io";  // Origin header will be just the domain
 
 const FHIR_SERVERS = {
+
+    // HealthInteractive public test server
+    deloitte: {
+        name: "Deloitte HealthInteractive Server",
+        clientId: "sharedClient2",
+        clientSecret: "REDACTED_DELOITTE_DEMO_CLIENT_SECRET",
+        usePkce: false,
+        tokenAuthMethod: "client_secret_post",
+        tokenReferrerPolicy: "origin",
+        allowBasicAuthFallback: false,
+        scope: "patient/*.read launch/patient openid fhirUser offline_access",
+        // CRITICAL: These must EXACTLY match what's registered in Cigna Developer Portal
+        redirectUri: `${GITHUB_PAGES_URL}/app.html`,  // https://russellott.github.io/demosmartapp/app.html
+        launchUri: `${GITHUB_PAGES_URL}/launch.html`,  // https://russellott.github.io/demosmartapp/launch.html
+        iss: "https://deloitte.connectathons.com/",
+        authorizeUrl: "https://deloitte.connectathons.com/auth",
+        tokenUrl: "https://deloitte.connectathons.com/token",
+        description: "Deloitte connectathon sandbox server with sample patients (R4)",
+        requiresStateNonce: true,
+        useNumericStateNonce: true,
+        // Expected Origin header (browser will send this automatically)
+        expectedOrigin: GITHUB_ORIGIN  // https://russellott.github.io
+    },
+    
     // SMART Health IT Sandbox - Public Testing Sandbox (No Registration Required)
     sandbox: {
         name: "SMART Health IT Sandbox",
