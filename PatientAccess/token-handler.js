@@ -16,7 +16,27 @@ const TokenHandler = {
         }
     },
 
-    async executeTokenRequest(tokenUrl, bodyString, headers, referrerPolicy = 'origin') {
+    /**
+     * Execute a token POST. If useCorsProxy is true and CORS_PROXY_URL is
+     * configured, the request is routed through the Cloudflare Worker proxy
+     * to avoid servers that don't return Access-Control-Allow-Origin.
+     */
+    async executeTokenRequest(tokenUrl, bodyString, headers, referrerPolicy = 'origin', useCorsProxy = false) {
+        // Determine whether to proxy
+        const shouldProxy = useCorsProxy && typeof CORS_PROXY_URL !== 'undefined' && CORS_PROXY_URL;
+
+        if (shouldProxy) {
+            // Route through the CORS proxy worker
+            const proxiedUrl = `${CORS_PROXY_URL}/?url=${encodeURIComponent(tokenUrl)}`;
+            console.log('🔀 Routing token request through CORS proxy:', proxiedUrl);
+            return fetch(proxiedUrl, {
+                method: 'POST',
+                headers,
+                body: bodyString
+                // referrerPolicy not needed — proxy is same-origin-friendly
+            });
+        }
+
         return fetch(tokenUrl, {
             method: 'POST',
             headers,
@@ -40,9 +60,11 @@ const TokenHandler = {
         const tokenAuthMethod = params.token_auth_method || (params.code_verifier ? 'none' : 'client_secret_post');
         const tokenReferrerPolicy = params.token_referrer_policy || 'origin';
         const allowBasicAuthFallback = params.allow_basic_auth_fallback !== false;
+        const useCorsProxy = !!params.use_cors_proxy;
         console.log('Token auth method:', tokenAuthMethod);
         console.log('Token referrer policy:', tokenReferrerPolicy);
         console.log('Allow basic-auth fallback:', allowBasicAuthFallback);
+        console.log('Use CORS proxy:', useCorsProxy);
         if (params.server_key) {
             console.log('Server key:', params.server_key);
         }
@@ -97,7 +119,7 @@ const TokenHandler = {
                 console.log('✓ Using client_secret_basic Authorization header');
             }
 
-            let response = await this.executeTokenRequest(tokenUrl, bodyString, headers, tokenReferrerPolicy);
+            let response = await this.executeTokenRequest(tokenUrl, bodyString, headers, tokenReferrerPolicy, useCorsProxy);
 
             console.log('Response status:', response.status);
             console.log('Response headers:', Object.fromEntries(response.headers.entries()));
@@ -147,7 +169,7 @@ const TokenHandler = {
                         fallbackBody.append('code_verifier', params.code_verifier);
                     }
 
-                    response = await this.executeTokenRequest(tokenUrl, fallbackBody.toString(), fallbackHeaders, tokenReferrerPolicy);
+                    response = await this.executeTokenRequest(tokenUrl, fallbackBody.toString(), fallbackHeaders, tokenReferrerPolicy, useCorsProxy);
                     console.log('Fallback response status:', response.status);
 
                     if (response.ok) {

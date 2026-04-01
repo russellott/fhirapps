@@ -576,6 +576,7 @@
                     tokenAuthMethod: clientState.tokenAuthMethod || (clientState.usePkce ? 'none' : 'client_secret_post'),
                     tokenReferrerPolicy: clientState.tokenReferrerPolicy || 'origin',
                     allowBasicAuthFallback: clientState.allowBasicAuthFallback !== false,
+                    useCorsProxy: !!clientState.useCorsProxy,
                     serverUrl: clientState.serverUrl,
                     tokenUri: clientState.tokenUri
                 };
@@ -589,7 +590,8 @@
                     token_auth_method: clientState.tokenAuthMethod || (clientState.usePkce ? 'none' : 'client_secret_post'),
                     server_key: clientState.serverKey || null,
                     token_referrer_policy: clientState.tokenReferrerPolicy || 'origin',
-                    allow_basic_auth_fallback: clientState.allowBasicAuthFallback !== false
+                    allow_basic_auth_fallback: clientState.allowBasicAuthFallback !== false,
+                    use_cors_proxy: !!clientState.useCorsProxy
                 };
 
                 if (clientState.usePkce && clientState.codeVerifier) {

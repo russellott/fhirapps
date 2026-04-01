@@ -317,6 +317,7 @@
                     nonce: nonce,
                     scope: config.scope,
                     usePkce: usePkce,
+                    useCorsProxy: !!config.useCorsProxy,
                     codeVerifier: pkce ? pkce.codeVerifier : null,
                     codeChallengeMethod: pkce ? pkce.codeChallengeMethod : null
                 };

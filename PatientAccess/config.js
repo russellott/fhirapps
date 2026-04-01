@@ -4,6 +4,10 @@
 const GITHUB_PAGES_URL = "https://russellott.github.io/fhirapps/PatientAccess";
 const GITHUB_ORIGIN = "https://russellott.github.io";  // Origin header will be just the domain
 
+// CORS Proxy — Deploy the included cors-proxy-worker.js to Cloudflare Workers
+// and paste your worker URL here.  Leave blank to disable proxy fallback.
+const CORS_PROXY_URL = "https://YOUR_CLOUDFLARE_WORKER_SUBDOMAIN.workers.dev/";  // e.g. "https://fhir-cors-proxy.<your-subdomain>.workers.dev"
+
 const FHIR_SERVERS = {
 
     // HealthInteractive public test server (Keycloak realm: demo)
@@ -25,6 +29,8 @@ const FHIR_SERVERS = {
         tokenUrl: "https://deloitte.connectathons.com/realms/demo/protocol/openid-connect/token",
         // Enable OIDC auto-discovery as fallback (will fetch .well-known/openid-configuration)
         useOidcDiscovery: true,
+        // Route token exchange through CORS proxy (server does not send Access-Control-Allow-Origin)
+        useCorsProxy: true,
         description: "Deloitte connectathon sandbox server with sample patients (R4)",
         requiresStateNonce: true,
         useNumericStateNonce: true,
