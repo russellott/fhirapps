@@ -51,9 +51,15 @@ const PROVIDER_DIRECTORIES = {
         searchResources: true,
         supportedResources: ["Practitioner", "Organization", "Location", "PractitionerRole", "HealthcareService"],
         isPublic: true
+    },
+    mtmedicaid: {
+        name: "Montana Medicaid",
+        baseUrl: "https://api.platform.mt.healthinteractive.net/provider-directory",
+        description: "Montana Medicaid - Provider Directory",
+        searchResources: true,
+        supportedResources: ["Practitioner", "Organization"],
+        isPublic: true
     }
-
-
 };
 
 // Set which directory to use by default
