@@ -129,7 +129,7 @@ const FHIR_SERVERS = {
                 clientId: "ada7f357-1f77-4b67-ba77-ea676f089243",
                 clientSecret: "hrKQtSvnsvCfMzv8WBlQA1rULhF5X4Tq5wxyUMfMUrOYQtdxKsIEqF0LVZI7tVZRuvBTKSkPBpHnMCDyMUsc5g==",
                 usePkce: true,
-                tokenAuthMethod: "none",
+                tokenAuthMethod: "client_secret_post",
                 scope: "patient/*.read launch/patient openid fhirUser offline_access",
                 redirectUri: `${APP_BASE_URL}/app.html`,
                 launchUri: `${APP_BASE_URL}/launch.html`,
