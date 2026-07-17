@@ -599,7 +599,8 @@
                     addDebugLog('TOKEN', '✓ Including code_verifier for PKCE token exchange');
                 }
 
-                if (!clientState.usePkce && clientState.clientSecret) {
+                const resolvedAuthMethod = clientState.tokenAuthMethod || (clientState.usePkce ? 'none' : 'client_secret_post');
+                if (clientState.clientSecret && resolvedAuthMethod !== 'none') {
                     tokenParams.client_secret = clientState.clientSecret;
                     addDebugLog('TOKEN', '✓ Including client_secret in token exchange');
                 }
@@ -692,7 +693,7 @@
                 };
 
                 // If client secret exists, include it for potential refresh
-                if (!clientState.usePkce && clientState.clientSecret) {
+                if (clientState.clientSecret && resolvedAuthMethod !== 'none') {
                     fullClientState.clientSecret = clientState.clientSecret;
                     addDebugLog('FHIR', '✓ Client secret included for token refresh capability');
                 }
