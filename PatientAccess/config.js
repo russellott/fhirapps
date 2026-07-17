@@ -45,121 +45,158 @@ const FHIR_SERVERS = {
         clientId: "demo_app_whatever",
         clientSecret: null,
         usePkce: true,
-        scope: "launch/patient patient/*.read openid fhirUser offline_access",
-        redirectUri: `${GITHUB_PAGES_URL}/app.html`,  // https://russellott.github.io/demosmartapp/app.html
-        launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        iss: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/fhir",
-        authorizeUrl: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/auth/authorize",
-        tokenUrl: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/auth/token",
-        description: "Public testing sandbox with sample patients (R4, AUTO simulation)",
-        isPublic: true
-    },
 
-    // Cigna FHIR Server
-    cigna: {
-        name: "Cigna Developer API",
-        clientId: "5f965408-7972-4813-b25a-288d7169031c",
-        clientSecret: null,
-        usePkce: true,
-        tokenAuthMethod: "client_secret_post",
-        tokenReferrerPolicy: "no-referrer",
-        allowBasicAuthFallback: false,
-        scope: "patient/*.read launch/patient openid fhirUser offline_access",
-        // CRITICAL: These must EXACTLY match what's registered in Cigna Developer Portal
-        redirectUri: `${GITHUB_PAGES_URL}/app.html`,  // https://russellott.github.io/demosmartapp/app.html
-        launchUri: `${GITHUB_PAGES_URL}/launch.html`,  // https://russellott.github.io/demosmartapp/launch.html
-        iss: "https://fhir.cigna.com/PatientAccess/v1-devportal",
-        authorizeUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/authorize",
-        tokenUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/token",
-        description: "Real payer FHIR API for CMS Patient Access",
-        requiresStateNonce: true,
-        useNumericStateNonce: true,
-        // Expected Origin header (browser will send this automatically)
-        expectedOrigin: GITHUB_ORIGIN  // https://russellott.github.io
-    },
+        // --- Dynamic Environment Detection ---
+        // This block auto-detects if running on localhost or GitHub Pages and sets base/origin accordingly.
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const LOCAL_BASE_URL = `http://${window.location.hostname}:${window.location.port || 80}/fhirapps/PatientAccess`;
+        const LOCAL_ORIGIN = `http://${window.location.hostname}:${window.location.port || 80}`;
+        const GITHUB_PAGES_URL = "https://russellott.github.io/fhirapps/PatientAccess";
+        const GITHUB_ORIGIN = "https://russellott.github.io";
 
-    // EPIC Sandbox FHIR Server
-    epic: {
-        name: "Epic Sandbox FHIR API",
-        clientId: "ada7f357-1f77-4b67-ba77-ea676f089243",
-        clientSecret: "hrKQtSvnsvCfMzv8WBlQA1rULhF5X4Tq5wxyUMfMUrOYQtdxKsIEqF0LVZI7tVZRuvBTKSkPBpHnMCDyMUsc5g==",
-        usePkce: true,
-        tokenAuthMethod: "none",
-        scope: "patient/*.read launch/patient openid fhirUser offline_access",
-        redirectUri: `${GITHUB_PAGES_URL}/app.html`,
-        launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        iss: "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4",
-        authorizeUrl: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize",
-        tokenUrl: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token",
-        description: "Real payer FHIR API for CMS Patient Access",
-        requiresStateNonce: true,
-        useNumericStateNonce: true,
-        // Expected Origin header (browser will send this automatically)
-        description: "Epic's CMS-compliant Patient Access API",
-        expectedOrigin: GITHUB_ORIGIN
-    },
+        // Use local or GitHub base/origin depending on environment
+        const APP_BASE_URL = isLocalhost ? LOCAL_BASE_URL : GITHUB_PAGES_URL;
+        const APP_ORIGIN = isLocalhost ? LOCAL_ORIGIN : GITHUB_ORIGIN;
 
-    // Logica Health Sandbox
-    logica: {
-        name: "Logica Health Sandbox",
-        clientId: "demo_app_logica",
-        clientSecret: null,
-        usePkce: true,
-        scope: "launch/patient patient/*.read openid fhirUser offline_access",
-        redirectUri: `${GITHUB_PAGES_URL}/app.html`,
-        launchUri: `${GITHUB_PAGES_URL}/launch.html`,
-        iss: "https://api.logicahealth.org/FHIRResearchSandbox/open/",
-        description: "Advanced testing sandbox with rich test data",
-        isPublic: true,
-        expectedOrigin: GITHUB_ORIGIN
-    }
-};
+        // CORS Proxy: If using a proxy, update to allow your local origin if running locally
+        // For local dev, you may need to deploy your own worker and set CORS_PROXY_URL to allow localhost
+        const CORS_PROXY_URL = isLocalhost ? "" : "https://autumn-leaf-a71d.russellott.workers.dev/";
 
-// Set which server to use by default
-const ACTIVE_SERVER = 'cigna';
+        const FHIR_SERVERS = {
+            // HealthInteractive public test server (Keycloak realm: demo)
+            deloitte: {
+                name: "Deloitte HealthInteractive Server",
+                clientId: "sharedClient2",
+                clientSecret: "CJoSQwBfBmweH8WzEqpEGa10HkCEIOr6",
+                usePkce: false,
+                tokenAuthMethod: "client_secret_post",
+                tokenReferrerPolicy: "no-referrer",
+                allowBasicAuthFallback: false,
+                scope: "patient/Patient.read patient/Condition.read patient/AllergyIntolerance.read patient/Condition.read patient/MedicationRequest.read patient/ExplanationOfBenefit.read",
+                // CRITICAL: These must EXACTLY match what's registered with the FHIR server
+                redirectUri: `${APP_BASE_URL}/app.html`,
+                launchUri: `${APP_BASE_URL}/launch.html`,
+                iss: "https://deloitte.connectathons.com/realms/demo",
+                authorizeUrl: "https://deloitte.connectathons.com/realms/demo/protocol/openid-connect/auth",
+                tokenUrl: "https://deloitte.connectathons.com/realms/demo/protocol/openid-connect/token",
+                fhirBaseUrl: "https://deloitte.connectathons.com",
+                useOidcDiscovery: true,
+                useCorsProxy: !isLocalhost, // Only use proxy on GitHub Pages
+                description: "Deloitte connectathon sandbox server with sample patients (R4)",
+                requiresStateNonce: true,
+                useNumericStateNonce: true,
+                expectedOrigin: APP_ORIGIN
+            },
+            // SMART Health IT Sandbox - Public Testing Sandbox (No Registration Required)
+            sandbox: {
+                name: "SMART Health IT Sandbox",
+                clientId: "demo_app_whatever",
+                clientSecret: null,
+                usePkce: true,
+                scope: "launch/patient patient/*.read openid fhirUser offline_access",
+                redirectUri: `${APP_BASE_URL}/app.html`,
+                launchUri: `${APP_BASE_URL}/launch.html`,
+                iss: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/fhir",
+                authorizeUrl: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/auth/authorize",
+                tokenUrl: "https://launch.smarthealthit.org/v/r4/sim/WzMsIiIsIiIsIkFVVE8iLDAsMCwwLCIiLCIiLCIiLCIiLCIiLCIiLCIiLDAsMSwiIl0/auth/token",
+                description: "Public testing sandbox with sample patients (R4, AUTO simulation)",
+                isPublic: true,
+                expectedOrigin: APP_ORIGIN
+            },
+            // Cigna FHIR Server
+            cigna: {
+                name: "Cigna Developer API",
+                clientId: "5f965408-7972-4813-b25a-288d7169031c",
+                clientSecret: null,
+                usePkce: true,
+                tokenAuthMethod: "client_secret_post",
+                tokenReferrerPolicy: "no-referrer",
+                allowBasicAuthFallback: false,
+                scope: "patient/*.read launch/patient openid fhirUser offline_access",
+                redirectUri: `${APP_BASE_URL}/app.html`,
+                launchUri: `${APP_BASE_URL}/launch.html`,
+                iss: "https://fhir.cigna.com/PatientAccess/v1-devportal",
+                authorizeUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/authorize",
+                tokenUrl: "https://r-hi2.cigna.com/mga/sps/oauth/oauth20/token",
+                description: "Real payer FHIR API for CMS Patient Access",
+                requiresStateNonce: true,
+                useNumericStateNonce: true,
+                expectedOrigin: APP_ORIGIN
+            },
+            // EPIC Sandbox FHIR Server
+            epic: {
+                name: "Epic Sandbox FHIR API",
+                clientId: "ada7f357-1f77-4b67-ba77-ea676f089243",
+                clientSecret: "hrKQtSvnsvCfMzv8WBlQA1rULhF5X4Tq5wxyUMfMUrOYQtdxKsIEqF0LVZI7tVZRuvBTKSkPBpHnMCDyMUsc5g==",
+                usePkce: true,
+                tokenAuthMethod: "none",
+                scope: "patient/*.read launch/patient openid fhirUser offline_access",
+                redirectUri: `${APP_BASE_URL}/app.html`,
+                launchUri: `${APP_BASE_URL}/launch.html`,
+                iss: "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4",
+                authorizeUrl: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize",
+                tokenUrl: "https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token",
+                description: "Epic's CMS-compliant Patient Access API",
+                requiresStateNonce: true,
+                useNumericStateNonce: true,
+                expectedOrigin: APP_ORIGIN
+            },
+            // Logica Health Sandbox
+            logica: {
+                name: "Logica Health Sandbox",
+                clientId: "demo_app_logica",
+                clientSecret: null,
+                usePkce: true,
+                scope: "launch/patient patient/*.read openid fhirUser offline_access",
+                redirectUri: `${APP_BASE_URL}/app.html`,
+                launchUri: `${APP_BASE_URL}/launch.html`,
+                iss: "https://api.logicahealth.org/FHIRResearchSandbox/open/",
+                description: "Advanced testing sandbox with rich test data",
+                isPublic: true,
+                expectedOrigin: APP_ORIGIN
+            }
+        };
 
-// Helper function to generate numeric state/nonce
-function generateNumericToken(length = 10) {
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += Math.floor(Math.random() * 10);
-    }
-    return result;
-}
+        // Set which server to use by default
+        const ACTIVE_SERVER = 'sandbox'; // Use SMART sandbox for easiest local testing
 
-// Helper function to get current configuration
-function getCurrentConfig() {
-    return FHIR_SERVERS[ACTIVE_SERVER];
-}
+        // Helper function to generate numeric state/nonce
+        function generateNumericToken(length = 10) {
+            let result = '';
+            for (let i = 0; i < length; i++) {
+                result += Math.floor(Math.random() * 10);
+            }
+            return result;
+        }
 
-// Helper to check if server is configured
-function isServerConfigured(serverKey) {
-    const server = FHIR_SERVERS[serverKey];
-    if (!server || !server.clientId) return false;
+        // Helper function to get current configuration
+        function getCurrentConfig() {
+            return FHIR_SERVERS[ACTIVE_SERVER];
+        }
 
-    // Public sandboxes are always "configured"
-    if (server.isPublic) {
-        return true;
-    }
+        // Helper to check if server is configured
+        function isServerConfigured(serverKey) {
+            const server = FHIR_SERVERS[serverKey];
+            if (!server || !server.clientId) return false;
+            if (server.isPublic) {
+                return true;
+            }
+            const placeholders = [
+                'YOUR_CLIENT_ID',
+                'YOUR_' + serverKey.toUpperCase() + '_CLIENT_ID',
+                'YOUR_SANDBOX_CLIENT_ID',
+                'YOUR_ANTHEM_CLIENT_ID',
+                'YOUR_LOGICA_CLIENT_ID'
+            ];
+            return !placeholders.some(p => server.clientId.includes(p));
+        }
 
-    // For private/production servers, check if they have real credentials
-    const placeholders = [
-        'YOUR_CLIENT_ID',
-        'YOUR_' + serverKey.toUpperCase() + '_CLIENT_ID',
-        'YOUR_SANDBOX_CLIENT_ID',
-        'YOUR_ANTHEM_CLIENT_ID',
-        'YOUR_LOGICA_CLIENT_ID'
-    ];
-
-    return !placeholders.some(p => server.clientId.includes(p));
-}
-
-// Log configuration on load
-console.log('=== App Configuration ===');
-console.log('GitHub Pages URL:', GITHUB_PAGES_URL);
-console.log('Expected Origin:', GITHUB_ORIGIN);
-console.log('Active Server:', ACTIVE_SERVER);
-console.log('Server Config:', {
-    ...FHIR_SERVERS[ACTIVE_SERVER],
-    clientSecret: FHIR_SERVERS[ACTIVE_SERVER]?.clientSecret ? '***HIDDEN***' : 'not provided'
-});
+        // Log configuration on load
+        console.log('=== App Configuration ===');
+        console.log('App Base URL:', APP_BASE_URL);
+        console.log('Expected Origin:', APP_ORIGIN);
+        console.log('Active Server:', ACTIVE_SERVER);
+        console.log('Server Config:', {
+            ...FHIR_SERVERS[ACTIVE_SERVER],
+            clientSecret: FHIR_SERVERS[ACTIVE_SERVER]?.clientSecret ? '***HIDDEN***' : 'not provided'
+        });
