@@ -2,9 +2,10 @@
 title: 'Story 2.3: Edit & Delete Member'
 type: 'feature'
 created: '2026-07-30'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '6fa5b44'
-review_loop_iteration: 0
+final_revision: 'see commit after review patch'
+review_loop_iteration: 1
 followup_review_recommended: false
 context:
   - '_bmad-output/project-context.md'
@@ -209,4 +210,33 @@ Then build the updated member:
 - Click Delete (danger) → member gone from table, count in card header decremented
 - Edit row A, click Edit row B → row A returns read-only, row B becomes editable
 - Click Delete while add form open → add form gone, delete confirm shows on clicked row
+- Open edit row, click Add Member → edit row gone, add form appears at bottom
 - Zero console errors throughout
+
+## Review Triage Log
+
+### 2026-07-30 — Review pass
+- intent_gap: 1
+- bad_spec: 0
+- patch: 1: (high 0, medium 1, low 0)
+- defer: 1: (low 1)
+- reject: 0
+- addressed_findings:
+  - `[medium]` `[patch]` `rosterAddBtn` handler only set `_rosterAddingMember = true` without clearing `_rosterEditingMemberId` / `_rosterDeleteConfirmMemberId`; opening the add form while an edit or delete-confirm row was active would render both rows simultaneously — fixed by adding the two null-assignments before the `_rosterAddingMember = true` line in the handler
+- deferred_findings:
+  - `[low]` `[defer]` `flex-wrap:wrap;gap:4px` was added to the delete-confirm actions div beyond what the spec specified; purely additive, no functional impact, fine to keep
+
+## Auto Run Result
+
+**Status:** done
+
+**Summary:** Wired inline Edit and Delete for member rows. Edit replaces the clicked row with pre-filled inputs (5-cell flex layout matching the add form); validation on Save marks empty fields with `.invalid` class; `roster.map` updates the member preserving its `id`. Delete replaces the Actions cell with "Remove {name}?" confirm + Cancel + danger Delete; confirmed delete uses `roster.filter`. Focus moves to the Delete button on confirm render. Both state properties reset on nav-away and on expanding a different payer card. Review patch: Add Member handler was missing the clear of edit/delete-confirm state flags.
+
+**Files changed:**
+- `PayerToPayerClient/app.html` — modified; `_rosterEditingMemberId` and `_rosterDeleteConfirmMemberId` state props, showView nav-away guard, renderRosterTab forEach three-way branch, expand handler reset, new edit/delete wiring in bindPreviousPayersEvents roster block, Add Member button handler fix
+
+**Review findings:** 1 patch applied (medium: missing state clear in Add Member handler). 1 deferred (low: additive flex style). 0 rejected.
+
+**Follow-up review recommended:** false
+
+**Residual risks:** Epic 2 fully complete. Epic 3 (Exchange Execution) is next.

@@ -67,3 +67,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-2-add-member-to-roster.md`
   summary: `function updateMaButtonState` is declared as a function declaration inside an `if` block in non-strict mode, which is ES5-implementation-defined behavior.
   evidence: All modern browsers apply identical ES2015 Annex B semantics; no practical risk for this demo tool. Fix: convert to `var updateMaButtonState = function() { ... }` for idiomatic ES5 style.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-3-edit-delete-member.md`
+  summary: Delete-confirm actions `<div>` uses inline `style="flex-wrap:wrap;gap:4px;"` beyond the spec; purely additive, no functional impact.
+  evidence: Accepted as-is; fine to remove in a cleanup pass.
