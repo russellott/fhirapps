@@ -224,6 +224,30 @@
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
+
+    /* Payer cards */
+    .payer-list { display: flex; flex-direction: column; gap: 8px; }
+    .payer-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .payer-card-header {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      gap: 12px;
+    }
+    .payer-name { font-weight: 500; color: var(--color-text-primary); flex: 1; }
+    .payer-member-count {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      background: var(--color-surface-alt);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+    .payer-list-actions { margin-top: 16px; }
   </style>
 </head>
 <body>
@@ -259,19 +283,60 @@
   </div>
 
   <script>
-    // ConfigModule — stub; full implementation in Story 1.2
+    // ConfigModule — config read/write and cold-start seeding
     const ConfigModule = {
       getConfig: function() {
-        const raw = localStorage.getItem('p2pConfig');
+        var raw = localStorage.getItem('p2pConfig');
         if (!raw) return null;
         try { return JSON.parse(raw); } catch (e) { return null; }
       },
+
       saveConfig: function(config) {
         localStorage.setItem('p2pConfig', JSON.stringify(config));
       },
-      addPayer: function(payerObj) {},
-      updatePayer: function(id, fields) {},
-      deletePayer: function(id) {}
+
+      seedFromDefaults: function() {
+        var previousPayers = Object.entries(FHIR_SERVERS).map(function(entry) {
+          return Object.assign({}, entry[1], {
+            id: crypto.randomUUID(),
+            roster: []
+          });
+        });
+        var config = {
+          newPayer: { name: '', clientId: '', clientSecret: '' },
+          corsProxyUrl: '',
+          previousPayers: previousPayers
+        };
+        ConfigModule.saveConfig(config);
+        return config;
+      },
+
+      addPayer: function(payerObj) {
+        var config = ConfigModule.getConfig() || { newPayer: { name: '', clientId: '', clientSecret: '' }, corsProxyUrl: '', previousPayers: [] };
+        var newEntry = Object.assign({}, payerObj, {
+          id: crypto.randomUUID(),
+          roster: []
+        });
+        config.previousPayers.push(newEntry);
+        ConfigModule.saveConfig(config);
+        return newEntry.id;
+      },
+
+      updatePayer: function(id, fields) {
+        var config = ConfigModule.getConfig();
+        if (!config) return;
+        var idx = config.previousPayers.findIndex(function(p) { return p.id === id; });
+        if (idx === -1) return;
+        Object.assign(config.previousPayers[idx], fields);
+        ConfigModule.saveConfig(config);
+      },
+
+      deletePayer: function(id) {
+        var config = ConfigModule.getConfig();
+        if (!config) return;
+        config.previousPayers = config.previousPayers.filter(function(p) { return p.id !== id; });
+        ConfigModule.saveConfig(config);
+      }
     };
 
     // ExchangeModule — stub; full implementation in Story 3.2
@@ -288,6 +353,15 @@
     // UIModule — view routing and event binding
     const UIModule = {
       currentView: 'previous-payers',
+
+      escapeHtml: function(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      },
 
       showView: function(name) {
         if (name === 'results' && !ExchangeModule.hasResult()) return;
@@ -308,12 +382,31 @@
       },
 
       renderPreviousPayers: function() {
+        var config = ConfigModule.getConfig();
+        var payers = config && config.previousPayers ? config.previousPayers : [];
         var html = '<div class="view-container">';
         html += '<div class="view-header"><h2>Previous Payers</h2></div>';
-        html += '<div class="empty-state">';
-        html += '<p>No Previous Payers configured. Add your first Previous Payer to get started.</p>';
-        html += '<button class="btn btn-primary">Add Previous Payer</button>';
-        html += '</div></div>';
+        if (payers.length === 0) {
+          html += '<div class="empty-state">';
+          html += '<p>No Previous Payers configured. Add your first Previous Payer to get started.</p>';
+          html += '<button class="btn btn-primary">Add Previous Payer</button>';
+          html += '</div>';
+        } else {
+          html += '<div class="payer-list">';
+          payers.forEach(function(payer) {
+            var memberCount = payer.roster ? payer.roster.length : 0;
+            var memberLabel = memberCount === 1 ? '1 member' : memberCount + ' members';
+            html += '<div class="payer-card" data-payer-id="' + UIModule.escapeHtml(payer.id) + '">';
+            html += '<div class="payer-card-header">';
+            html += '<span class="payer-name">' + UIModule.escapeHtml(payer.name) + '</span>';
+            html += '<span class="payer-member-count">' + memberLabel + '</span>';
+            html += '</div>';
+            html += '</div>';
+          });
+          html += '</div>';
+          html += '<div class="payer-list-actions"><button class="btn btn-primary">Add Previous Payer</button></div>';
+        }
+        html += '</div>';
         return html;
       },
 
@@ -376,6 +469,9 @@
       init: function() {
         if (localStorage.getItem('p2pSidebarCollapsed') === 'true') {
           document.getElementById('app-sidebar').classList.add('collapsed');
+        }
+        if (!ConfigModule.getConfig()) {
+          ConfigModule.seedFromDefaults();
         }
         this.bindEvents();
         this.updateNewPayerChip();
