@@ -665,8 +665,10 @@
         var html = '';
 
         var addRow = '<tr id="member-add-row">';
-        addRow += '<td><input id="ma-first-name" class="form-input" type="text" aria-label="First name" aria-required="true" autocomplete="off"></td>';
-        addRow += '<td><input id="ma-last-name" class="form-input" type="text" aria-label="Last name" aria-required="true" autocomplete="off"></td>';
+        addRow += '<td><div style="display:flex;gap:4px;">';
+        addRow += '<input id="ma-first-name" class="form-input" type="text" aria-label="First name" aria-required="true" autocomplete="off" style="flex:1;min-width:0;">';
+        addRow += '<input id="ma-last-name" class="form-input" type="text" aria-label="Last name" aria-required="true" autocomplete="off" style="flex:1;min-width:0;">';
+        addRow += '</div></td>';
         addRow += '<td><input id="ma-dob" class="form-input" type="date" aria-label="Date of birth" aria-required="true"></td>';
         addRow += '<td><select id="ma-gender" class="form-input" aria-label="Gender" aria-required="true">';
         addRow += '<option value="" disabled selected>Select gender</option>';
