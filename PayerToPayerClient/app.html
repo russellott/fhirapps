@@ -312,6 +312,33 @@
     .secret-toggle:hover { background: var(--color-surface-alt); }
     .btn-secondary { background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-primary); }
     .btn-secondary:hover { background: var(--color-surface-alt); }
+
+    /* Payer form (add/edit) */
+    .payer-card-body { border-top: 1px solid var(--color-border); }
+    .payer-form { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .form-field { display: flex; flex-direction: column; gap: 4px; }
+    .form-field label { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); }
+    .required-marker { color: var(--color-error); margin-left: 2px; }
+    .form-input {
+      width: 100%;
+      padding: 7px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      font-size: 14px;
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      box-sizing: border-box;
+    }
+    .form-input:focus { outline: 2px solid var(--color-primary); outline-offset: -1px; }
+    .form-input.invalid { border-color: var(--color-error); }
+    .field-error { font-size: 12px; color: var(--color-error); display: none; margin-top: 2px; }
+    .field-error.visible { display: block; }
+    .form-row { display: flex; gap: 8px; align-items: flex-end; }
+    .form-row .form-input { flex: 1; min-width: 0; }
+    .form-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 8px; border-top: 1px solid var(--color-border); margin-top: 4px; }
+    .form-check-row { display: flex; align-items: center; gap: 8px; }
+    .form-check-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer; }
+    .form-check-row label { font-size: 14px; color: var(--color-text-primary); cursor: pointer; margin: 0; font-weight: normal; }
   </style>
 </head>
 <body>
@@ -419,6 +446,7 @@
       currentView: 'previous-payers',
       _settingsKeyHandler: null,
       _backdropClickHandler: null,
+      _expandedPayerId: null,
 
       escapeHtml: function(str) {
         return String(str)
@@ -431,6 +459,7 @@
 
       showView: function(name) {
         if (name === 'results' && !ExchangeModule.hasResult()) return;
+        if (name !== 'previous-payers') { UIModule._expandedPayerId = null; }
         this.currentView = name;
         document.querySelectorAll('.nav-item').forEach(function(btn) {
           btn.classList.toggle('active', btn.dataset.view === name);
@@ -445,17 +474,19 @@
           html = UIModule.renderResults();
         }
         main.innerHTML = html;
+        if (name === 'previous-payers') { UIModule.bindPreviousPayersEvents(); }
       },
 
       renderPreviousPayers: function() {
         var config = ConfigModule.getConfig();
         var payers = config && config.previousPayers ? config.previousPayers : [];
+        var isAdding = UIModule._expandedPayerId === 'new';
         var html = '<div class="view-container">';
         html += '<div class="view-header"><h2>Previous Payers</h2></div>';
-        if (payers.length === 0) {
+        if (payers.length === 0 && !isAdding) {
           html += '<div class="empty-state">';
           html += '<p>No Previous Payers configured. Add your first Previous Payer to get started.</p>';
-          html += '<button class="btn btn-primary">Add Previous Payer</button>';
+          html += '<button id="add-payer-btn" class="btn btn-primary">Add Previous Payer</button>';
           html += '</div>';
         } else {
           html += '<div class="payer-list">';
@@ -469,8 +500,13 @@
             html += '</div>';
             html += '</div>';
           });
+          if (isAdding) {
+            html += UIModule.renderNewPayerForm();
+          }
           html += '</div>';
-          html += '<div class="payer-list-actions"><button class="btn btn-primary">Add Previous Payer</button></div>';
+          if (!isAdding) {
+            html += '<div class="payer-list-actions"><button id="add-payer-btn" class="btn btn-primary">Add Previous Payer</button></div>';
+          }
         }
         html += '</div>';
         return html;
@@ -494,7 +530,150 @@
       },
 
       showAddPayer: function() {
-        // Story 1.4
+        UIModule._expandedPayerId = 'new';
+        UIModule.showView('previous-payers');
+      },
+
+      renderNewPayerForm: function() {
+        var html = '<div class="payer-card" id="new-payer-card">';
+        html += '<div class="payer-card-header">';
+        html += '<span class="payer-name">New Previous Payer</span>';
+        html += '</div>';
+        html += '<div class="payer-card-body"><div class="payer-form">';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-name">Display Name<span class="required-marker" aria-hidden="true">*</span></label>';
+        html += '<input id="np-name" class="form-input" type="text" autocomplete="off">';
+        html += '<div id="np-name-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-fhir-url">FHIR Base URL<span class="required-marker" aria-hidden="true">*</span></label>';
+        html += '<input id="np-fhir-url" class="form-input" type="url" autocomplete="off">';
+        html += '<div id="np-fhir-url-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-token-url">Token URL<span class="required-marker" aria-hidden="true">*</span></label>';
+        html += '<input id="np-token-url" class="form-input" type="url" autocomplete="off">';
+        html += '<div id="np-token-url-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-client-id">Client ID<span class="required-marker" aria-hidden="true">*</span></label>';
+        html += '<input id="np-client-id" class="form-input" type="text" autocomplete="off">';
+        html += '<div id="np-client-id-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-secret">Client Secret<span class="required-marker" aria-hidden="true">*</span></label>';
+        html += '<div class="form-row">';
+        html += '<input id="np-secret" class="form-input" type="password" autocomplete="off">';
+        html += '<button id="np-secret-toggle" class="secret-toggle" type="button" aria-label="Show client secret">Show</button>';
+        html += '</div>';
+        html += '<div id="np-secret-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-auth-method">Token Auth Method</label>';
+        html += '<select id="np-auth-method" class="form-input">';
+        html += '<option value="client_secret_post" selected>client_secret_post</option>';
+        html += '<option value="client_secret_basic">client_secret_basic</option>';
+        html += '</select>';
+        html += '</div>';
+
+        html += '<div class="form-check-row">';
+        html += '<input type="checkbox" id="np-use-proxy">';
+        html += '<label for="np-use-proxy">Use CORS Proxy</label>';
+        html += '</div>';
+
+        html += '<div class="form-actions">';
+        html += '<button id="new-payer-cancel" class="btn btn-secondary" type="button">Cancel</button>';
+        html += '<button id="new-payer-save" class="btn btn-primary" type="button">Save</button>';
+        html += '</div>';
+
+        html += '</div></div>';
+        html += '</div>';
+        return html;
+      },
+
+      bindPreviousPayersEvents: function() {
+        var addBtn = document.getElementById('add-payer-btn');
+        if (addBtn) {
+          addBtn.addEventListener('click', function() { UIModule.showAddPayer(); });
+        }
+
+        if (UIModule._expandedPayerId !== 'new') return;
+
+        var cancelBtn = document.getElementById('new-payer-cancel');
+        if (cancelBtn) {
+          cancelBtn.addEventListener('click', function() {
+            UIModule._expandedPayerId = null;
+            UIModule.showView('previous-payers');
+          });
+        }
+
+        var toggleBtn = document.getElementById('np-secret-toggle');
+        if (toggleBtn) {
+          toggleBtn.addEventListener('click', function() {
+            var inp = document.getElementById('np-secret');
+            if (inp.type === 'password') {
+              inp.type = 'text';
+              toggleBtn.textContent = 'Hide';
+              toggleBtn.setAttribute('aria-label', 'Hide client secret');
+            } else {
+              inp.type = 'password';
+              toggleBtn.textContent = 'Show';
+              toggleBtn.setAttribute('aria-label', 'Show client secret');
+            }
+          });
+        }
+
+        var saveBtn = document.getElementById('new-payer-save');
+        if (saveBtn) {
+          saveBtn.addEventListener('click', function() {
+            var fields = [
+              { inputId: 'np-name',      errorId: 'np-name-error',      key: 'name' },
+              { inputId: 'np-fhir-url',  errorId: 'np-fhir-url-error',  key: 'fhirBaseUrl' },
+              { inputId: 'np-token-url', errorId: 'np-token-url-error', key: 'tokenUrl' },
+              { inputId: 'np-client-id', errorId: 'np-client-id-error', key: 'clientId' },
+              { inputId: 'np-secret',    errorId: 'np-secret-error',    key: 'clientSecret' }
+            ];
+
+            // Clear previous errors
+            fields.forEach(function(f) {
+              var inp = document.getElementById(f.inputId);
+              var err = document.getElementById(f.errorId);
+              inp.classList.remove('invalid');
+              err.classList.remove('visible');
+            });
+
+            // Validate
+            var valid = true;
+            var values = {};
+            fields.forEach(function(f) {
+              var inp = document.getElementById(f.inputId);
+              var err = document.getElementById(f.errorId);
+              var val = inp.value.trim();
+              values[f.key] = val;
+              if (!val) {
+                inp.classList.add('invalid');
+                err.textContent = 'Required';
+                err.classList.add('visible');
+                valid = false;
+              }
+            });
+
+            if (!valid) return;
+
+            values.tokenAuthMethod = document.getElementById('np-auth-method').value;
+            values.useProxy = document.getElementById('np-use-proxy').checked;
+
+            ConfigModule.addPayer(values);
+            UIModule._expandedPayerId = null;
+            UIModule.showView('previous-payers');
+          });
+        }
       },
 
       showSettings: function() {
