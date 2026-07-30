@@ -339,6 +339,19 @@
     .form-check-row { display: flex; align-items: center; gap: 8px; }
     .form-check-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--color-primary); cursor: pointer; }
     .form-check-row label { font-size: 14px; color: var(--color-text-primary); cursor: pointer; margin: 0; font-weight: normal; }
+    .payer-card-header { cursor: pointer; }
+    .payer-delete-btn { background: none; border: 1px solid var(--color-border); border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; color: var(--color-text-secondary); white-space: nowrap; }
+    .payer-delete-btn:hover { color: var(--color-error); border-color: var(--color-error); background: var(--color-surface-alt); }
+    .tab-bar { display: flex; border-bottom: 1px solid var(--color-border); padding: 0 16px; gap: 0; }
+    .tab-btn { background: none; border: none; padding: 10px 14px; font-size: 13px; font-weight: 500; cursor: pointer; color: var(--color-text-secondary); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+    .tab-btn:hover:not(.active) { color: var(--color-text-primary); }
+    .delete-confirm-row { display: flex; align-items: center; padding: 12px 16px; gap: 12px; flex-wrap: wrap; }
+    .delete-confirm-text { flex: 1; font-size: 14px; color: var(--color-text-primary); }
+    .delete-confirm-actions { display: flex; gap: 8px; }
+    .btn-danger { background: var(--color-error); color: #fff; border: none; }
+    .btn-danger:hover { opacity: 0.85; }
+    .roster-stub { font-size: 14px; color: var(--color-text-secondary); padding: 16px 0; }
   </style>
 </head>
 <body>
@@ -447,6 +460,8 @@
       _settingsKeyHandler: null,
       _backdropClickHandler: null,
       _expandedPayerId: null,
+      _expandedPayerTab: 'config',
+      _deleteConfirmPayerId: null,
 
       escapeHtml: function(str) {
         return String(str)
@@ -459,7 +474,11 @@
 
       showView: function(name) {
         if (name === 'results' && !ExchangeModule.hasResult()) return;
-        if (name !== 'previous-payers') { UIModule._expandedPayerId = null; }
+        if (name !== 'previous-payers') {
+          UIModule._expandedPayerId = null;
+          UIModule._expandedPayerTab = 'config';
+          UIModule._deleteConfirmPayerId = null;
+        }
         this.currentView = name;
         document.querySelectorAll('.nav-item').forEach(function(btn) {
           btn.classList.toggle('active', btn.dataset.view === name);
@@ -494,10 +513,32 @@
             var memberCount = payer.roster ? payer.roster.length : 0;
             var memberLabel = memberCount === 1 ? '1 member' : memberCount + ' members';
             html += '<div class="payer-card" data-payer-id="' + UIModule.escapeHtml(payer.id) + '">';
-            html += '<div class="payer-card-header">';
-            html += '<span class="payer-name">' + UIModule.escapeHtml(payer.name) + '</span>';
-            html += '<span class="payer-member-count">' + memberLabel + '</span>';
-            html += '</div>';
+
+            if (UIModule._deleteConfirmPayerId === payer.id) {
+              // Delete confirmation row
+              html += '<div class="delete-confirm-row">';
+              html += '<span class="delete-confirm-text">Delete ' + UIModule.escapeHtml(payer.name) + '? This will also delete its ' + memberCount + '-member Roster.</span>';
+              html += '<div class="delete-confirm-actions">';
+              html += '<button id="delete-cancel-' + UIModule.escapeHtml(payer.id) + '" class="btn btn-secondary" type="button">Cancel</button>';
+              html += '<button id="delete-confirm-' + UIModule.escapeHtml(payer.id) + '" class="btn btn-danger" type="button">Delete</button>';
+              html += '</div>';
+              html += '</div>';
+            } else {
+              // Normal header (collapsed or expanded)
+              html += '<div class="payer-card-header" data-payer-id="' + UIModule.escapeHtml(payer.id) + '">';
+              html += '<span class="payer-name">' + UIModule.escapeHtml(payer.name) + '</span>';
+              html += '<span class="payer-member-count">' + memberLabel + '</span>';
+              html += '<button class="payer-delete-btn" data-payer-id="' + UIModule.escapeHtml(payer.id) + '" type="button" aria-label="Delete payer">Delete</button>';
+              html += '</div>';
+
+              if (UIModule._expandedPayerId === payer.id) {
+                // Expanded body with tabs
+                html += '<div class="payer-card-body">';
+                html += UIModule.renderEditPayerForm(payer);
+                html += '</div>';
+              }
+            }
+
             html += '</div>';
           });
           if (isAdding) {
@@ -597,82 +638,281 @@
         return html;
       },
 
+      renderEditPayerForm: function(payer) {
+        var isConfig = UIModule._expandedPayerTab === 'config';
+        var html = '<div class="tab-bar">';
+        html += '<button class="tab-btn' + (isConfig ? ' active' : '') + '" data-tab="config" data-payer-id="' + UIModule.escapeHtml(payer.id) + '" type="button">Config</button>';
+        html += '<button class="tab-btn' + (!isConfig ? ' active' : '') + '" data-tab="roster" data-payer-id="' + UIModule.escapeHtml(payer.id) + '" type="button">Roster</button>';
+        html += '</div>';
+        html += '<div class="tab-content">';
+        if (isConfig) {
+          html += '<div class="payer-form">';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-name">Display Name<span class="required-marker" aria-hidden="true">*</span></label>';
+          html += '<input id="ep-name" class="form-input" type="text" value="' + UIModule.escapeHtml(payer.name) + '" autocomplete="off">';
+          html += '<div id="ep-name-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-fhir-url">FHIR Base URL<span class="required-marker" aria-hidden="true">*</span></label>';
+          html += '<input id="ep-fhir-url" class="form-input" type="url" value="' + UIModule.escapeHtml(payer.fhirBaseUrl || '') + '" autocomplete="off">';
+          html += '<div id="ep-fhir-url-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-token-url">Token URL<span class="required-marker" aria-hidden="true">*</span></label>';
+          html += '<input id="ep-token-url" class="form-input" type="url" value="' + UIModule.escapeHtml(payer.tokenUrl || '') + '" autocomplete="off">';
+          html += '<div id="ep-token-url-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-client-id">Client ID<span class="required-marker" aria-hidden="true">*</span></label>';
+          html += '<input id="ep-client-id" class="form-input" type="text" value="' + UIModule.escapeHtml(payer.clientId || '') + '" autocomplete="off">';
+          html += '<div id="ep-client-id-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-secret">Client Secret<span class="required-marker" aria-hidden="true">*</span></label>';
+          html += '<div class="form-row">';
+          html += '<input id="ep-secret" class="form-input" type="password" value="' + UIModule.escapeHtml(payer.clientSecret || '') + '" autocomplete="off">';
+          html += '<button id="ep-secret-toggle" class="secret-toggle" type="button" aria-label="Show client secret">Show</button>';
+          html += '</div>';
+          html += '<div id="ep-secret-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-auth-method">Token Auth Method</label>';
+          html += '<select id="ep-auth-method" class="form-input">';
+          html += '<option value="client_secret_post"' + (payer.tokenAuthMethod === 'client_secret_post' || !payer.tokenAuthMethod ? ' selected' : '') + '>client_secret_post</option>';
+          html += '<option value="client_secret_basic"' + (payer.tokenAuthMethod === 'client_secret_basic' ? ' selected' : '') + '>client_secret_basic</option>';
+          html += '</select>';
+          html += '</div>';
+
+          html += '<div class="form-check-row">';
+          html += '<input type="checkbox" id="ep-use-proxy"' + (payer.useProxy ? ' checked' : '') + '>';
+          html += '<label for="ep-use-proxy">Use CORS Proxy</label>';
+          html += '</div>';
+
+          html += '<div class="form-actions">';
+          html += '<button id="ep-cancel" class="btn btn-secondary" type="button">Cancel</button>';
+          html += '<button id="ep-save" class="btn btn-primary" type="button">Save</button>';
+          html += '</div>';
+
+          html += '</div>';
+        } else {
+          html += '<div class="payer-form"><p class="roster-stub">Member roster management coming in Epic 2.</p></div>';
+        }
+        html += '</div>';
+        return html;
+      },
+
       bindPreviousPayersEvents: function() {
         var addBtn = document.getElementById('add-payer-btn');
         if (addBtn) {
           addBtn.addEventListener('click', function() { UIModule.showAddPayer(); });
         }
 
-        if (UIModule._expandedPayerId !== 'new') return;
-
-        var cancelBtn = document.getElementById('new-payer-cancel');
-        if (cancelBtn) {
-          cancelBtn.addEventListener('click', function() {
-            UIModule._expandedPayerId = null;
+        // Wire payer card header clicks (expand/collapse)
+        document.querySelectorAll('.payer-card-header[data-payer-id]').forEach(function(header) {
+          header.addEventListener('click', function(e) {
+            if (e.target.closest('.payer-delete-btn')) return;
+            var pid = header.dataset.payerId;
+            if (UIModule._expandedPayerId === pid) {
+              UIModule._expandedPayerId = null;
+            } else {
+              UIModule._expandedPayerId = pid;
+              UIModule._expandedPayerTab = 'config';
+              UIModule._deleteConfirmPayerId = null;
+            }
             UIModule.showView('previous-payers');
           });
-        }
+        });
 
-        var toggleBtn = document.getElementById('np-secret-toggle');
-        if (toggleBtn) {
-          toggleBtn.addEventListener('click', function() {
-            var inp = document.getElementById('np-secret');
-            if (inp.type === 'password') {
-              inp.type = 'text';
-              toggleBtn.textContent = 'Hide';
-              toggleBtn.setAttribute('aria-label', 'Hide client secret');
-            } else {
-              inp.type = 'password';
-              toggleBtn.textContent = 'Show';
-              toggleBtn.setAttribute('aria-label', 'Show client secret');
-            }
+        // Wire delete buttons
+        document.querySelectorAll('.payer-delete-btn[data-payer-id]').forEach(function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var pid = btn.dataset.payerId;
+            UIModule._deleteConfirmPayerId = pid;
+            UIModule._expandedPayerId = null;
+            UIModule._expandedPayerTab = 'config';
+            UIModule.showView('previous-payers');
           });
+        });
+
+        // Wire delete confirm/cancel
+        var cpid = UIModule._deleteConfirmPayerId;
+        if (cpid) {
+          var confirmBtn = document.getElementById('delete-confirm-' + cpid);
+          if (confirmBtn) {
+            confirmBtn.addEventListener('click', function() {
+              ConfigModule.deletePayer(cpid);
+              UIModule._deleteConfirmPayerId = null;
+              UIModule.showView('previous-payers');
+            });
+          }
+          var cancelDelBtn = document.getElementById('delete-cancel-' + cpid);
+          if (cancelDelBtn) {
+            cancelDelBtn.addEventListener('click', function() {
+              UIModule._deleteConfirmPayerId = null;
+              UIModule.showView('previous-payers');
+            });
+          }
         }
 
-        var saveBtn = document.getElementById('new-payer-save');
-        if (saveBtn) {
-          saveBtn.addEventListener('click', function() {
-            var fields = [
-              { inputId: 'np-name',      errorId: 'np-name-error',      key: 'name' },
-              { inputId: 'np-fhir-url',  errorId: 'np-fhir-url-error',  key: 'fhirBaseUrl' },
-              { inputId: 'np-token-url', errorId: 'np-token-url-error', key: 'tokenUrl' },
-              { inputId: 'np-client-id', errorId: 'np-client-id-error', key: 'clientId' },
-              { inputId: 'np-secret',    errorId: 'np-secret-error',    key: 'clientSecret' }
-            ];
+        // Wire tab buttons
+        document.querySelectorAll('.tab-btn[data-tab]').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            UIModule._expandedPayerTab = btn.dataset.tab;
+            UIModule.showView('previous-payers');
+          });
+        });
 
-            // Clear previous errors
-            fields.forEach(function(f) {
-              var inp = document.getElementById(f.inputId);
-              var err = document.getElementById(f.errorId);
-              inp.classList.remove('invalid');
-              err.classList.remove('visible');
+        // Wire new payer form (Story 1.4)
+        if (UIModule._expandedPayerId === 'new') {
+          var cancelBtn = document.getElementById('new-payer-cancel');
+          if (cancelBtn) {
+            cancelBtn.addEventListener('click', function() {
+              UIModule._expandedPayerId = null;
+              UIModule.showView('previous-payers');
             });
+          }
 
-            // Validate
-            var valid = true;
-            var values = {};
-            fields.forEach(function(f) {
-              var inp = document.getElementById(f.inputId);
-              var err = document.getElementById(f.errorId);
-              var val = inp.value.trim();
-              values[f.key] = val;
-              if (!val) {
-                inp.classList.add('invalid');
-                err.textContent = 'Required';
-                err.classList.add('visible');
-                valid = false;
+          var toggleBtn = document.getElementById('np-secret-toggle');
+          if (toggleBtn) {
+            toggleBtn.addEventListener('click', function() {
+              var inp = document.getElementById('np-secret');
+              if (inp.type === 'password') {
+                inp.type = 'text';
+                toggleBtn.textContent = 'Hide';
+                toggleBtn.setAttribute('aria-label', 'Hide client secret');
+              } else {
+                inp.type = 'password';
+                toggleBtn.textContent = 'Show';
+                toggleBtn.setAttribute('aria-label', 'Show client secret');
               }
             });
+          }
 
-            if (!valid) return;
+          var saveBtn = document.getElementById('new-payer-save');
+          if (saveBtn) {
+            saveBtn.addEventListener('click', function() {
+              var fields = [
+                { inputId: 'np-name',      errorId: 'np-name-error',      key: 'name' },
+                { inputId: 'np-fhir-url',  errorId: 'np-fhir-url-error',  key: 'fhirBaseUrl' },
+                { inputId: 'np-token-url', errorId: 'np-token-url-error', key: 'tokenUrl' },
+                { inputId: 'np-client-id', errorId: 'np-client-id-error', key: 'clientId' },
+                { inputId: 'np-secret',    errorId: 'np-secret-error',    key: 'clientSecret' }
+              ];
 
-            values.tokenAuthMethod = document.getElementById('np-auth-method').value;
-            values.useProxy = document.getElementById('np-use-proxy').checked;
+              // Clear previous errors
+              fields.forEach(function(f) {
+                var inp = document.getElementById(f.inputId);
+                var err = document.getElementById(f.errorId);
+                inp.classList.remove('invalid');
+                err.classList.remove('visible');
+              });
 
-            ConfigModule.addPayer(values);
-            UIModule._expandedPayerId = null;
-            UIModule.showView('previous-payers');
-          });
+              // Validate
+              var valid = true;
+              var values = {};
+              fields.forEach(function(f) {
+                var inp = document.getElementById(f.inputId);
+                var err = document.getElementById(f.errorId);
+                var val = inp.value.trim();
+                values[f.key] = val;
+                if (!val) {
+                  inp.classList.add('invalid');
+                  err.textContent = 'Required';
+                  err.classList.add('visible');
+                  valid = false;
+                }
+              });
+
+              if (!valid) return;
+
+              values.tokenAuthMethod = document.getElementById('np-auth-method').value;
+              values.useProxy = document.getElementById('np-use-proxy').checked;
+
+              ConfigModule.addPayer(values);
+              UIModule._expandedPayerId = null;
+              UIModule.showView('previous-payers');
+            });
+          }
+        }
+
+        // Wire edit form (when an existing payer is expanded, Config tab active)
+        if (UIModule._expandedPayerId && UIModule._expandedPayerId !== 'new' && UIModule._expandedPayerTab === 'config') {
+          var epToggleBtn = document.getElementById('ep-secret-toggle');
+          if (epToggleBtn) {
+            epToggleBtn.addEventListener('click', function() {
+              var inp = document.getElementById('ep-secret');
+              if (inp.type === 'password') {
+                inp.type = 'text';
+                epToggleBtn.textContent = 'Hide';
+                epToggleBtn.setAttribute('aria-label', 'Hide client secret');
+              } else {
+                inp.type = 'password';
+                epToggleBtn.textContent = 'Show';
+                epToggleBtn.setAttribute('aria-label', 'Show client secret');
+              }
+            });
+          }
+
+          var epCancelBtn = document.getElementById('ep-cancel');
+          if (epCancelBtn) {
+            epCancelBtn.addEventListener('click', function() {
+              UIModule._expandedPayerId = null;
+              UIModule.showView('previous-payers');
+            });
+          }
+
+          var epSaveBtn = document.getElementById('ep-save');
+          if (epSaveBtn) {
+            epSaveBtn.addEventListener('click', function() {
+              var epFields = [
+                { inputId: 'ep-name',      errorId: 'ep-name-error',      key: 'name' },
+                { inputId: 'ep-fhir-url',  errorId: 'ep-fhir-url-error',  key: 'fhirBaseUrl' },
+                { inputId: 'ep-token-url', errorId: 'ep-token-url-error', key: 'tokenUrl' },
+                { inputId: 'ep-client-id', errorId: 'ep-client-id-error', key: 'clientId' },
+                { inputId: 'ep-secret',    errorId: 'ep-secret-error',    key: 'clientSecret' }
+              ];
+
+              // Clear previous errors
+              epFields.forEach(function(f) {
+                var inp = document.getElementById(f.inputId);
+                var err = document.getElementById(f.errorId);
+                inp.classList.remove('invalid');
+                err.classList.remove('visible');
+              });
+
+              // Validate
+              var valid = true;
+              var values = {};
+              epFields.forEach(function(f) {
+                var inp = document.getElementById(f.inputId);
+                var err = document.getElementById(f.errorId);
+                var val = inp.value.trim();
+                values[f.key] = val;
+                if (!val) {
+                  inp.classList.add('invalid');
+                  err.textContent = 'Required';
+                  err.classList.add('visible');
+                  valid = false;
+                }
+              });
+
+              if (!valid) return;
+
+              values.tokenAuthMethod = document.getElementById('ep-auth-method').value;
+              values.useProxy = document.getElementById('ep-use-proxy').checked;
+
+              ConfigModule.updatePayer(UIModule._expandedPayerId, values);
+              UIModule._expandedPayerId = null;
+              UIModule.showView('previous-payers');
+            });
+          }
         }
       },
 
