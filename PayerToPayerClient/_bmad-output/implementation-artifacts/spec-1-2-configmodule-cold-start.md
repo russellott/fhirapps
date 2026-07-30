@@ -2,9 +2,9 @@
 title: 'Story 1.2: ConfigModule & FHIR_SERVERS Cold-Start'
 type: 'feature'
 created: '2026-07-30'
-status: 'in-progress'
+status: 'done'
 baseline_revision: 'ed58e9f12445aca66fc709439e85d99c5a356e1b'
-final_revision: ''
+final_revision: 'c90f34fa6185145118c848dfa270b8d38fd69d3d'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -124,4 +124,26 @@ context:
 
 ## Review Triage Log
 
+### 2026-07-30 — Review pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 1: (high 1)
+- defer: 3: (low 3)
+- reject: 2
+- addressed_findings:
+  - `[high]` `[patch]` Added null guards to `addPayer`, `updatePayer`, `deletePayer` — `getConfig()` can return null if localStorage is cleared mid-session; `addPayer` initializes a minimal empty config, the others return early
+
 ## Auto Run Result
+
+**Status:** done
+
+**Summary:** Implemented full ConfigModule with 6 methods (getConfig, saveConfig, seedFromDefaults, addPayer, updatePayer, deletePayer); cold-start seeding from FHIR_SERVERS; payer card CSS; updated renderPreviousPayers with escapeHtml-guarded card rendering. Review patch: null guards on mutation methods.
+
+**Files changed:**
+- `PayerToPayerClient/app.html` — modified; full ConfigModule, escapeHtml, payer card CSS, renderPreviousPayers with card rendering, init seed guard
+
+**Review findings:** 1 patch applied (high: null guard on mutation methods). 3 deferred (FHIR_SERVERS existence guard, updatePayer id/roster protection, non-array roster). 2 rejected (name field present in FHIR_SERVERS values; escapeHtml null concern not reachable in practice).
+
+**Verification:** Manual — clear localStorage, reload, payer cards render with names from config.js. Reload without clearing, same payers persist with same UUIDs. Malformed config re-seeds. Zero console errors.
+
+**Residual risks:** `addPayer` initializes minimal empty config (no newPayer/corsProxyUrl from FHIR_SERVERS) if localStorage cleared mid-session; expand/collapse, Config tab, and Roster tab are deferred to Stories 1.4/1.5.
