@@ -2,9 +2,10 @@
 title: 'Story 2.2: Add Member to Roster'
 type: 'feature'
 created: '2026-07-30'
-status: 'in-progress'
+status: 'done'
 baseline_revision: '5928972'
-review_loop_iteration: 0
+final_revision: 'see commit after review patch'
+review_loop_iteration: 1
 followup_review_recommended: false
 context:
   - '_bmad-output/project-context.md'
@@ -200,3 +201,32 @@ context:
 - Add member to empty roster → table appears with new row (not empty state message)
 - Open add form, expand different payer card → form gone, new card on Config tab
 - Zero console errors throughout
+
+## Review Triage Log
+
+### 2026-07-30 — Review pass
+- intent_gap: 0
+- bad_spec: 1
+- patch: 1: (high 1, medium 0, low 0)
+- defer: 2: (low 2)
+- reject: 0
+- addressed_findings:
+  - `[high]` `[patch]` `addRow` had 6 `<td>` cells (separate First Name and Last Name cells) while the table header has 5 columns — fixed by combining both name inputs into a single `<td>` with a flex div wrapper (`display:flex;gap:4px`); `updateMaButtonState` and Save handler unchanged since they query by ID
+- deferred_findings:
+  - `[low]` `[defer]` Collapsing the same card (if-branch in expand handler) does not reset `_rosterAddingMember`; self-healing since any subsequent expand (else-branch) clears it; no user-visible defect
+  - `[low]` `[defer]` `function updateMaButtonState` declaration inside an if-block is ES5-implementation-defined; modern browsers apply ES2015 Annex B semantics uniformly so there is no practical risk; could be converted to `var updateMaButtonState = function(){}` in a future pass
+
+## Auto Run Result
+
+**Status:** done
+
+**Summary:** Wired the full Add Member flow on the Roster tab. Clicking Add Member shows an inline form row (empty-roster case: full table replaces empty state; non-empty case: form row appended below existing members). Save is disabled until all five required fields are non-empty (live `input`/`change` wiring). On Save: member appended via `ConfigModule.updatePayer`; `_rosterAddingMember` reset; view re-renders with updated count. Cancel resets state without saving. Review patch: collapsed first/last name `addRow` cells from 2 `<td>` to 1 `<td>` (flex wrapper) to match the 5-column header.
+
+**Files changed:**
+- `PayerToPayerClient/app.html` — modified; disabled-button CSS, `_rosterAddingMember` state property, showView nav-away reset, renderRosterTab extended for add-form row, expand handler reset, new roster-wiring block in bindPreviousPayersEvents
+
+**Review findings:** 1 patch applied (high: column count mismatch in addRow). 2 deferred (both low: collapse-handler missing reset, function-in-block style). 0 rejected.
+
+**Follow-up review recommended:** false
+
+**Residual risks:** Action buttons (Edit, Delete) on existing member rows are not yet wired — expected; Story 2.3 completes those interactions.

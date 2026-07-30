@@ -59,3 +59,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-1-roster-tab-member-table.md`
   summary: Roster table has no overflow-x: auto wrapper; on narrow viewports the 5-column table will overflow the payer card body without a horizontal scroll container.
   evidence: App is primarily desktop-oriented; narrow viewport use is minimal for this demo tool. Fix: wrap `.roster-table` in a `<div style="overflow-x:auto">` container.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-add-member-to-roster.md`
+  summary: Collapsing the currently-expanded card (the `if` branch in the expand/collapse handler) does not reset `_rosterAddingMember`; only the `else` branch and the showView nav-away guard do.
+  evidence: Self-healing because any subsequent expand runs the else-branch which clears the flag; no user-visible defect. Fix: add `UIModule._rosterAddingMember = false` to the `if` branch alongside `UIModule._expandedPayerId = null`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-2-add-member-to-roster.md`
+  summary: `function updateMaButtonState` is declared as a function declaration inside an `if` block in non-strict mode, which is ES5-implementation-defined behavior.
+  evidence: All modern browsers apply identical ES2015 Annex B semantics; no practical risk for this demo tool. Fix: convert to `var updateMaButtonState = function() { ... }` for idiomatic ES5 style.
