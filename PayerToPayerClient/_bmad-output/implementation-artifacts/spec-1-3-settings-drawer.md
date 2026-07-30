@@ -2,9 +2,9 @@
 title: 'Story 1.3: Settings Drawer — New Payer Identity & CORS Proxy URL'
 type: 'feature'
 created: '2026-07-30'
-status: 'in-progress'
+status: 'done'
 baseline_revision: 'cfe025b6c1cd41c4a2a3e5b80f15023e87a41b63'
-final_revision: ''
+final_revision: 'b63fa03b2fb5f03b059e565e248cab1a4504e962'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -221,4 +221,29 @@ This preserves `previousPayers`.
 
 ## Review Triage Log
 
+### 2026-07-30 — Review pass
+- intent_gap: 0
+- bad_spec: 0
+- patch: 3: (high 2, medium 1)
+- defer: 0
+- reject: 1
+- addressed_findings:
+  - `[high]` `[patch]` Guard at top of `showSettings()` removes existing keydown handler before creating a new one — prevents listener leak on double-open
+  - `[high]` `[patch]` `closeSettings()` setTimeout now checks `!overlay.classList.contains('open')` before clearing innerHTML — prevents stale timer from wiping a freshly reopened drawer
+  - `[medium]` `[patch]` Backdrop click listener stored in `UIModule._backdropClickHandler` and removed in `closeSettings()` — prevents listener accumulation across multiple opens
+  - `[reject]` Save null-fallback `previousPayers:[]` — if localStorage is cleared mid-session, payers are already gone; fallback is correct recovery behavior
+
 ## Auto Run Result
+
+**Status:** done
+
+**Summary:** Implemented the Settings drawer — 360px slide-in panel with New Payer Name, Client ID, Client Secret (masked, show/hide), and CORS Proxy URL fields. Focus trap, Escape/backdrop/Cancel close without saving. Save merges into existing config and updates header chip. Review patches: double-open listener leak guard, stale-timer wipe guard, backdrop listener stored for clean removal.
+
+**Files changed:**
+- `PayerToPayerClient/app.html` — modified; drawer CSS, `#settings-overlay` shell, `showSettings()`, `closeSettings()`, `_backdropClickHandler` property, gear button wired
+
+**Review findings:** 3 patches applied (2 high: listener leak + stale timer; 1 medium: backdrop listener accumulation). 1 rejected (save null-fallback is correct recovery).
+
+**Verification:** Manual — open drawer, fill fields, save; chip updates. Escape/backdrop/Cancel close without saving. Tab/Shift+Tab stays within drawer. Show/Hide toggle masks secret. Dark mode uses surface/border tokens.
+
+**Residual risks:** None beyond existing deferred items.
