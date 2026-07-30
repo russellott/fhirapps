@@ -35,3 +35,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-add-previous-payer.md`
   summary: No duplicate payer detection before ConfigModule.addPayer; two entries with identical FHIR Base URLs are silently stored.
   evidence: Downstream exchange logic will need to handle ambiguous entries. Reasonable to add in a hardening pass.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-edit-delete-previous-payer.md`
+  summary: `e.stopPropagation()` on delete button is redundant — header click already guards with `e.target.closest('.payer-delete-btn')`; latent trap for future document-level listeners.
+  evidence: No functional bug today; stop-propagation prevents any future document-level click handler from firing for delete-button clicks.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-edit-delete-previous-payer.md`
+  summary: Tab switch and header click silently discard unsaved edit form values — spec accepted this as intentional but worth revisiting for UX hardening.
+  evidence: Full re-render on tab switch reads from ConfigModule, not DOM; any typed-but-unsaved values in ep-* fields are lost on every tab switch or card collapse.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-edit-delete-previous-payer.md`
+  summary: btn.dataset.tab not validated against known values before assignment to _expandedPayerTab; unknown value renders empty tab content with no error.
+  evidence: Only reachable via DOM manipulation; low practical risk for demo tool.
