@@ -47,3 +47,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-edit-delete-previous-payer.md`
   summary: btn.dataset.tab not validated against known values before assignment to _expandedPayerTab; unknown value renders empty tab content with no error.
   evidence: Only reachable via DOM manipulation; low practical risk for demo tool.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-config-export-import.md`
+  summary: FileReader.onload callback has no null guards — if closeSettings() fires during async read, getElementById returns null and throws a TypeError.
+  evidence: Race window is < 1ms for any plausible config file; dismissed as extremely low practical risk for demo tool. Fix: add `if (!errorEl) return;` after the getElementById block in the onload callback.

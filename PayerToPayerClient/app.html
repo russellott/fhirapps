@@ -312,6 +312,12 @@
     .secret-toggle:hover { background: var(--color-surface-alt); }
     .btn-secondary { background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-primary); }
     .btn-secondary:hover { background: var(--color-surface-alt); }
+    .drawer-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .export-feedback { font-size: 13px; color: var(--color-success); margin-top: 6px; }
+    .import-error { font-size: 13px; color: var(--color-error); margin-top: 6px; }
+    .import-summary { font-size: 13px; color: var(--color-text-primary); margin: 8px 0 4px; }
+    .import-warning { font-size: 12px; color: var(--color-text-secondary); margin-bottom: 8px; }
+    .import-confirm-actions { display: flex; gap: 8px; }
 
     /* Payer form (add/edit) */
     .payer-card-body { border-top: 1px solid var(--color-border); }
@@ -462,6 +468,7 @@
       _expandedPayerId: null,
       _expandedPayerTab: 'config',
       _deleteConfirmPayerId: null,
+      _importPendingConfig: null,
 
       escapeHtml: function(str) {
         return String(str)
@@ -957,6 +964,30 @@
         html += '<label class="settings-label" for="settings-proxy-url">CORS Proxy URL</label>';
         html += '<input id="settings-proxy-url" class="settings-input" type="url" value="' + UIModule.escapeHtml(proxyVal) + '">';
         html += '</div>';
+        html += '<div class="drawer-section-title" style="margin-top:8px">Config File</div>';
+        html += '<div class="settings-field">';
+        html += '<label class="settings-label">Export</label>';
+        html += '<div>';
+        html += '<button id="settings-export-btn" class="btn btn-secondary" type="button">Download Config</button>';
+        html += '<div id="export-feedback" class="export-feedback" style="display:none">Config file downloaded.</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '<div class="settings-field">';
+        html += '<label class="settings-label">Import</label>';
+        html += '<div>';
+        html += '<input type="file" id="settings-import-file" accept=".json" style="display:none">';
+        html += '<button id="settings-import-btn" class="btn btn-secondary" type="button">Load Config File</button>';
+        html += '<div id="import-error" class="import-error" style="display:none"></div>';
+        html += '<div id="import-confirm-area" style="display:none">';
+        html += '<p id="import-summary" class="import-summary"></p>';
+        html += '<p class="import-warning">This will replace your current configuration. All existing Previous Payers and Rosters will be overwritten. Continue?</p>';
+        html += '<div class="import-confirm-actions">';
+        html += '<button id="import-cancel-btn" class="btn btn-secondary" type="button">Cancel</button>';
+        html += '<button id="import-replace-btn" class="btn btn-danger" type="button">Replace</button>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
         html += '</div>';
         html += '<div class="drawer-footer">';
         html += '<button id="settings-cancel" class="btn btn-secondary" type="button">Cancel</button>';
@@ -999,6 +1030,84 @@
           UIModule.closeSettings();
         });
 
+        // Export
+        document.getElementById('settings-export-btn').addEventListener('click', function() {
+          var config = ConfigModule.getConfig() || {};
+          var blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = 'p2p-config.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          var feedback = document.getElementById('export-feedback');
+          if (feedback) { feedback.style.display = ''; }
+        });
+
+        // Import — trigger file picker
+        document.getElementById('settings-import-btn').addEventListener('click', function() {
+          document.getElementById('settings-import-file').click();
+        });
+
+        // Import — file selected
+        document.getElementById('settings-import-file').addEventListener('change', function(e) {
+          var file = e.target.files[0];
+          if (!file) return;
+          e.target.value = '';
+          var reader = new FileReader();
+          reader.onload = function(evt) {
+            var errorEl = document.getElementById('import-error');
+            var confirmArea = document.getElementById('import-confirm-area');
+            var summaryEl = document.getElementById('import-summary');
+            errorEl.style.display = 'none';
+            confirmArea.style.display = 'none';
+            var parsed;
+            try {
+              parsed = JSON.parse(evt.target.result);
+            } catch (err) {
+              errorEl.textContent = 'Invalid JSON file. Please check the format.';
+              errorEl.style.display = '';
+              return;
+            }
+            if (!parsed || !Array.isArray(parsed.previousPayers)) {
+              errorEl.textContent = 'Invalid config file. Expected a previousPayers array.';
+              errorEl.style.display = '';
+              return;
+            }
+            var payerCount = parsed.previousPayers.length;
+            var memberCount = parsed.previousPayers.reduce(function(sum, p) {
+              return sum + (Array.isArray(p.roster) ? p.roster.length : 0);
+            }, 0);
+            var payerLabel = payerCount === 1 ? '1 Previous Payer' : payerCount + ' Previous Payers';
+            var memberLabel = memberCount === 1 ? '1 total member' : memberCount + ' total members';
+            summaryEl.textContent = 'This file contains ' + payerLabel + ' with ' + memberLabel + '.';
+            UIModule._importPendingConfig = parsed;
+            confirmArea.style.display = '';
+          };
+          reader.readAsText(file);
+        });
+
+        // Import — Replace
+        document.getElementById('import-replace-btn').addEventListener('click', function() {
+          if (!UIModule._importPendingConfig) return;
+          ConfigModule.saveConfig(UIModule._importPendingConfig);
+          UIModule._importPendingConfig = null;
+          UIModule.closeSettings();
+          UIModule.showView('previous-payers');
+          UIModule.updateNewPayerChip();
+        });
+
+        // Import — Cancel
+        document.getElementById('import-cancel-btn').addEventListener('click', function() {
+          UIModule._importPendingConfig = null;
+          var confirmArea = document.getElementById('import-confirm-area');
+          if (confirmArea) { confirmArea.style.display = 'none'; }
+          var fileInput = document.getElementById('settings-import-file');
+          if (fileInput) { fileInput.value = ''; }
+        });
+
         UIModule._backdropClickHandler = function(e) {
           if (e.target === overlay) {
             UIModule.closeSettings();
@@ -1036,6 +1145,7 @@
       },
 
       closeSettings: function() {
+        UIModule._importPendingConfig = null;
         var overlay = document.getElementById('settings-overlay');
         overlay.classList.remove('open');
         if (UIModule._settingsKeyHandler) {
