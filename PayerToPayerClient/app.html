@@ -1043,6 +1043,8 @@
           var rosterAddBtn = document.getElementById('roster-add-btn');
           if (rosterAddBtn) {
             rosterAddBtn.addEventListener('click', function() {
+              UIModule._rosterEditingMemberId = null;
+              UIModule._rosterDeleteConfirmMemberId = null;
               UIModule._rosterAddingMember = true;
               UIModule.showView('previous-payers');
             });
