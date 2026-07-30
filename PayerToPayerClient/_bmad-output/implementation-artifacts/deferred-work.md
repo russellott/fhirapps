@@ -51,3 +51,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-config-export-import.md`
   summary: FileReader.onload callback has no null guards — if closeSettings() fires during async read, getElementById returns null and throws a TypeError.
   evidence: Race window is < 1ms for any plausible config file; dismissed as extremely low practical risk for demo tool. Fix: add `if (!errorEl) return;` after the getElementById block in the onload callback.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-roster-tab-member-table.md`
+  summary: payer.roster is checked via `|| []` (falsy guard only); a truthy non-array value from corrupted localStorage would pass through and crash roster.forEach.
+  evidence: Only reachable via manual localStorage corruption; all code paths that write roster use arrays. Low priority for demo tool. Fix: replace `payer.roster || []` with `Array.isArray(payer.roster) ? payer.roster : []`.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-2-1-roster-tab-member-table.md`
+  summary: Roster table has no overflow-x: auto wrapper; on narrow viewports the 5-column table will overflow the payer card body without a horizontal scroll container.
+  evidence: App is primarily desktop-oriented; narrow viewport use is minimal for this demo tool. Fix: wrap `.roster-table` in a `<div style="overflow-x:auto">` container.

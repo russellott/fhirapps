@@ -358,6 +358,17 @@
     .btn-danger { background: var(--color-error); color: #fff; border: none; }
     .btn-danger:hover { opacity: 0.85; }
     .roster-stub { font-size: 14px; color: var(--color-text-secondary); padding: 16px 0; }
+    .roster-container { padding: 12px 16px 16px; }
+    .roster-actions-bar { margin-bottom: 10px; }
+    .roster-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .roster-table th { text-align: left; padding: 6px 8px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-secondary); border-bottom: 1px solid var(--color-border); }
+    .roster-table td { padding: 8px 8px; border-bottom: 1px solid var(--color-border); color: var(--color-text-primary); vertical-align: middle; }
+    .roster-table tbody tr:last-child td { border-bottom: none; }
+    .roster-empty-state { padding: 20px 16px; }
+    .roster-empty-state p { font-size: 14px; color: var(--color-text-secondary); margin-bottom: 12px; }
+    .roster-actions { display: flex; gap: 6px; }
+    .roster-action-btn { background: none; border: 1px solid var(--color-border); border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; color: var(--color-text-secondary); white-space: nowrap; }
+    .roster-action-btn:hover { color: var(--color-text-primary); background: var(--color-surface-alt); }
   </style>
 </head>
 <body>
@@ -645,6 +656,43 @@
         return html;
       },
 
+      renderRosterTab: function(payer) {
+        var roster = payer.roster || [];
+        var html = '';
+        if (roster.length === 0) {
+          html += '<div class="roster-empty-state">';
+          html += '<p>No members in this roster. Add a member to enable exchanges with ' + UIModule.escapeHtml(payer.name) + '.</p>';
+          html += '<button id="roster-add-btn" class="btn btn-secondary" type="button" data-payer-id="' + UIModule.escapeHtml(payer.id) + '">Add Member</button>';
+          html += '</div>';
+        } else {
+          html += '<div class="roster-container">';
+          html += '<div class="roster-actions-bar">';
+          html += '<button id="roster-add-btn" class="btn btn-secondary" type="button" data-payer-id="' + UIModule.escapeHtml(payer.id) + '">Add Member</button>';
+          html += '</div>';
+          html += '<table class="roster-table">';
+          html += '<thead><tr>';
+          html += '<th scope="col">Name</th><th scope="col">Date of Birth</th><th scope="col">Gender</th><th scope="col">Member ID at Previous Payer</th><th scope="col">Actions</th>';
+          html += '</tr></thead>';
+          html += '<tbody>';
+          roster.forEach(function(member) {
+            var memberName = UIModule.escapeHtml(member.firstName || '') + ' ' + UIModule.escapeHtml(member.lastName || '');
+            html += '<tr>';
+            html += '<td>' + memberName + '</td>';
+            html += '<td>' + UIModule.escapeHtml(member.dateOfBirth || '') + '</td>';
+            html += '<td>' + UIModule.escapeHtml(member.gender || '') + '</td>';
+            html += '<td>' + UIModule.escapeHtml(member.memberIdAtOldPayer || '') + '</td>';
+            html += '<td><div class="roster-actions">';
+            html += '<button class="roster-action-btn" data-member-id="' + UIModule.escapeHtml(member.id) + '" data-payer-id="' + UIModule.escapeHtml(payer.id) + '" data-action="edit" type="button" aria-label="Edit ' + memberName + '">Edit</button>';
+            html += '<button class="roster-action-btn" data-member-id="' + UIModule.escapeHtml(member.id) + '" data-payer-id="' + UIModule.escapeHtml(payer.id) + '" data-action="delete" type="button" aria-label="Delete ' + memberName + '">Delete</button>';
+            html += '</div></td>';
+            html += '</tr>';
+          });
+          html += '</tbody></table>';
+          html += '</div>';
+        }
+        return html;
+      },
+
       renderEditPayerForm: function(payer) {
         var isConfig = UIModule._expandedPayerTab === 'config';
         var html = '<div class="tab-bar">';
@@ -708,7 +756,7 @@
 
           html += '</div>';
         } else {
-          html += '<div class="payer-form"><p class="roster-stub">Member roster management coming in Epic 2.</p></div>';
+          html += UIModule.renderRosterTab(payer);
         }
         html += '</div>';
         return html;
