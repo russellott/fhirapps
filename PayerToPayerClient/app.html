@@ -248,6 +248,70 @@
       border-radius: 10px;
     }
     .payer-list-actions { margin-top: 16px; }
+
+    /* Settings drawer */
+    #settings-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 100;
+    }
+    #settings-overlay.open { display: block; }
+    #settings-drawer {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 360px;
+      height: 100%;
+      background: var(--color-surface);
+      border-left: 1px solid var(--color-border);
+      display: flex;
+      flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.2s ease-out;
+    }
+    #settings-overlay.open #settings-drawer { transform: translateX(0); }
+    .drawer-header { padding: 20px 20px 16px; border-bottom: 1px solid var(--color-border); }
+    .drawer-header h2 { font-size: 17px; font-weight: 600; }
+    .drawer-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .drawer-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--color-border);
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+    .settings-field { display: flex; flex-direction: column; gap: 4px; }
+    .settings-label { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); }
+    .settings-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      font-size: 14px;
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      box-sizing: border-box;
+    }
+    .settings-input:focus { outline: 2px solid var(--color-primary); outline-offset: -1px; }
+    .field-row { display: flex; gap: 8px; align-items: flex-end; }
+    .field-row .settings-input { flex: 1; min-width: 0; }
+    .secret-toggle {
+      background: none;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+      min-height: 38px;
+      flex-shrink: 0;
+    }
+    .secret-toggle:hover { background: var(--color-surface-alt); }
+    .btn-secondary { background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-primary); }
+    .btn-secondary:hover { background: var(--color-surface-alt); }
   </style>
 </head>
 <body>
@@ -353,6 +417,8 @@
     // UIModule — view routing and event binding
     const UIModule = {
       currentView: 'previous-payers',
+      _settingsKeyHandler: null,
+      _backdropClickHandler: null,
 
       escapeHtml: function(str) {
         return String(str)
@@ -431,6 +497,144 @@
         // Story 1.4
       },
 
+      showSettings: function() {
+        // Clean up any prior open instance before re-rendering
+        if (UIModule._settingsKeyHandler) {
+          document.removeEventListener('keydown', UIModule._settingsKeyHandler);
+          UIModule._settingsKeyHandler = null;
+        }
+        if (UIModule._backdropClickHandler) {
+          var existingOverlay = document.getElementById('settings-overlay');
+          if (existingOverlay) { existingOverlay.removeEventListener('click', UIModule._backdropClickHandler); }
+          UIModule._backdropClickHandler = null;
+        }
+
+        var cfg = ConfigModule.getConfig() || { newPayer: { name: '', clientId: '', clientSecret: '' }, corsProxyUrl: '' };
+        var np = cfg.newPayer || {};
+        var nameVal = np.name || '';
+        var clientIdVal = np.clientId || '';
+        var secretVal = np.clientSecret || '';
+        var proxyVal = cfg.corsProxyUrl || '';
+
+        var html = '<div id="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settings-title">';
+        html += '<div class="drawer-header"><h2 id="settings-title">Settings</h2></div>';
+        html += '<div class="drawer-body">';
+        html += '<div class="settings-field">';
+        html += '<label class="settings-label" for="settings-name">New Payer Name</label>';
+        html += '<input id="settings-name" class="settings-input" type="text" value="' + UIModule.escapeHtml(nameVal) + '">';
+        html += '</div>';
+        html += '<div class="settings-field">';
+        html += '<label class="settings-label" for="settings-client-id">Client ID</label>';
+        html += '<input id="settings-client-id" class="settings-input" type="text" value="' + UIModule.escapeHtml(clientIdVal) + '">';
+        html += '</div>';
+        html += '<div class="settings-field">';
+        html += '<label class="settings-label" for="settings-secret">Client Secret</label>';
+        html += '<div class="field-row">';
+        html += '<input id="settings-secret" class="settings-input" type="password" value="' + UIModule.escapeHtml(secretVal) + '">';
+        html += '<button id="settings-secret-toggle" class="secret-toggle" type="button" aria-label="Show client secret">Show</button>';
+        html += '</div>';
+        html += '</div>';
+        html += '<div class="settings-field">';
+        html += '<label class="settings-label" for="settings-proxy-url">CORS Proxy URL</label>';
+        html += '<input id="settings-proxy-url" class="settings-input" type="url" value="' + UIModule.escapeHtml(proxyVal) + '">';
+        html += '</div>';
+        html += '</div>';
+        html += '<div class="drawer-footer">';
+        html += '<button id="settings-cancel" class="btn btn-secondary" type="button">Cancel</button>';
+        html += '<button id="settings-save" class="btn btn-primary" type="button">Save</button>';
+        html += '</div>';
+        html += '</div>';
+
+        var overlay = document.getElementById('settings-overlay');
+        overlay.innerHTML = html;
+        overlay.classList.add('open');
+
+        document.getElementById('settings-secret-toggle').addEventListener('click', function() {
+          var inp = document.getElementById('settings-secret');
+          var btn = document.getElementById('settings-secret-toggle');
+          if (inp.type === 'password') {
+            inp.type = 'text';
+            btn.textContent = 'Hide';
+            btn.setAttribute('aria-label', 'Hide client secret');
+          } else {
+            inp.type = 'password';
+            btn.textContent = 'Show';
+            btn.setAttribute('aria-label', 'Show client secret');
+          }
+        });
+
+        document.getElementById('settings-cancel').addEventListener('click', function() {
+          UIModule.closeSettings();
+        });
+
+        document.getElementById('settings-save').addEventListener('click', function() {
+          var config = ConfigModule.getConfig() || { newPayer: { name: '', clientId: '', clientSecret: '' }, corsProxyUrl: '', previousPayers: [] };
+          config.newPayer = {
+            name: document.getElementById('settings-name').value,
+            clientId: document.getElementById('settings-client-id').value,
+            clientSecret: document.getElementById('settings-secret').value
+          };
+          config.corsProxyUrl = document.getElementById('settings-proxy-url').value;
+          ConfigModule.saveConfig(config);
+          UIModule.updateNewPayerChip();
+          UIModule.closeSettings();
+        });
+
+        UIModule._backdropClickHandler = function(e) {
+          if (e.target === overlay) {
+            UIModule.closeSettings();
+          }
+        };
+        overlay.addEventListener('click', UIModule._backdropClickHandler);
+
+        UIModule._settingsKeyHandler = function(e) {
+          if (e.key === 'Escape') {
+            UIModule.closeSettings();
+            return;
+          }
+          if (e.key === 'Tab') {
+            var drawer = document.getElementById('settings-drawer');
+            if (!drawer) return;
+            var focusable = drawer.querySelectorAll('button, input');
+            var first = focusable[0];
+            var last = focusable[focusable.length - 1];
+            if (e.shiftKey) {
+              if (document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+              }
+            } else {
+              if (document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+              }
+            }
+          }
+        };
+        document.addEventListener('keydown', UIModule._settingsKeyHandler);
+
+        document.getElementById('settings-name').focus();
+      },
+
+      closeSettings: function() {
+        var overlay = document.getElementById('settings-overlay');
+        overlay.classList.remove('open');
+        if (UIModule._settingsKeyHandler) {
+          document.removeEventListener('keydown', UIModule._settingsKeyHandler);
+          UIModule._settingsKeyHandler = null;
+        }
+        if (UIModule._backdropClickHandler) {
+          overlay.removeEventListener('click', UIModule._backdropClickHandler);
+          UIModule._backdropClickHandler = null;
+        }
+        setTimeout(function() {
+          // Guard: don't wipe content if drawer was reopened before timeout fires
+          if (overlay && !overlay.classList.contains('open')) { overlay.innerHTML = ''; }
+        }, 200);
+        var gearBtn = document.getElementById('settings-btn');
+        if (gearBtn) { gearBtn.focus(); }
+      },
+
       updateNewPayerChip: function() {
         var config = ConfigModule.getConfig();
         var chip = document.getElementById('new-payer-chip');
@@ -462,7 +666,7 @@
         });
 
         document.getElementById('settings-btn').addEventListener('click', function() {
-          // Settings drawer — Story 1.3
+          UIModule.showSettings();
         });
       },
 
@@ -485,5 +689,6 @@
 
     init();
   </script>
+  <div id="settings-overlay"></div>
 </body>
 </html>
