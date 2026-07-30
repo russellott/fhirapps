@@ -19,3 +19,19 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-configmodule-cold-start.md`
   summary: renderPreviousPayers reads roster.length without confirming roster is an Array; truthy non-array roster yields garbled member count.
   evidence: Only reachable via manual localStorage editing; all code paths that write roster use arrays. Low priority for demo tool.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-add-previous-payer.md`
+  summary: fhirBaseUrl and tokenUrl fields accept any non-empty string; type="url" browser validation is bypassed because save is triggered by a button outside a <form> element.
+  evidence: Spec specified empty-check validation only; invalid URLs will surface as network errors at exchange time. Reasonable to add `new URL()` validation in a hardening pass.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-add-previous-payer.md`
+  summary: New-payer form provides no Escape key shortcut, no Enter-to-submit, and no focus management — inconsistent with settings drawer keyboard pattern.
+  evidence: Settings drawer uses _settingsKeyHandler + initial focus move; new-payer form has neither. Low priority for demo tool but worth aligning for keyboard accessibility.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-add-previous-payer.md`
+  summary: Required form fields lack aria-required="true" attribute; screen readers receive no signal that fields are required until validation fires.
+  evidence: Visual asterisk is aria-hidden; no required attribute; WCAG 2.1 SC 1.3.1. Low priority for demo tool.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-add-previous-payer.md`
+  summary: No duplicate payer detection before ConfigModule.addPayer; two entries with identical FHIR Base URLs are silently stored.
+  evidence: Downstream exchange logic will need to handle ambiguous entries. Reasonable to add in a hardening pass.
