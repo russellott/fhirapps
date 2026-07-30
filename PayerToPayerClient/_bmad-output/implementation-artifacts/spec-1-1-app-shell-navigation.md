@@ -2,8 +2,9 @@
 title: 'Story 1.1: App Shell & Navigation Structure'
 type: 'feature'
 created: '2026-07-29'
-status: 'in-review'
+status: 'done'
 baseline_revision: '7c25198deb85f2d5e1c7113f8f14d0b5f1447469'
+final_revision: '470115b08b02e0021cbc369076157d03ddd1bea4'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
