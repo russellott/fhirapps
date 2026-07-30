@@ -482,6 +482,8 @@
       _deleteConfirmPayerId: null,
       _importPendingConfig: null,
       _rosterAddingMember: false,
+      _rosterEditingMemberId: null,
+      _rosterDeleteConfirmMemberId: null,
 
       escapeHtml: function(str) {
         return String(str)
@@ -499,6 +501,8 @@
           UIModule._expandedPayerTab = 'config';
           UIModule._deleteConfirmPayerId = null;
           UIModule._rosterAddingMember = false;
+          UIModule._rosterEditingMemberId = null;
+          UIModule._rosterDeleteConfirmMemberId = null;
         }
         this.currentView = name;
         document.querySelectorAll('.nav-item').forEach(function(btn) {
@@ -701,16 +705,51 @@
           html += '<tbody>';
           roster.forEach(function(member) {
             var memberName = UIModule.escapeHtml(member.firstName || '') + ' ' + UIModule.escapeHtml(member.lastName || '');
-            html += '<tr>';
-            html += '<td>' + memberName + '</td>';
-            html += '<td>' + UIModule.escapeHtml(member.dateOfBirth || '') + '</td>';
-            html += '<td>' + UIModule.escapeHtml(member.gender || '') + '</td>';
-            html += '<td>' + UIModule.escapeHtml(member.memberIdAtOldPayer || '') + '</td>';
-            html += '<td><div class="roster-actions">';
-            html += '<button class="roster-action-btn" data-member-id="' + UIModule.escapeHtml(member.id) + '" data-payer-id="' + UIModule.escapeHtml(payer.id) + '" data-action="edit" type="button" aria-label="Edit ' + memberName + '">Edit</button>';
-            html += '<button class="roster-action-btn" data-member-id="' + UIModule.escapeHtml(member.id) + '" data-payer-id="' + UIModule.escapeHtml(payer.id) + '" data-action="delete" type="button" aria-label="Delete ' + memberName + '">Delete</button>';
-            html += '</div></td>';
-            html += '</tr>';
+            var mid = UIModule.escapeHtml(member.id);
+            var pid = UIModule.escapeHtml(payer.id);
+            if (UIModule._rosterEditingMemberId === member.id) {
+              html += '<tr id="member-edit-row">';
+              html += '<td><div style="display:flex;gap:4px;">';
+              html += '<input id="me-first-name" class="form-input" type="text" value="' + UIModule.escapeHtml(member.firstName || '') + '" aria-label="First name" autocomplete="off" style="flex:1;min-width:0;">';
+              html += '<input id="me-last-name" class="form-input" type="text" value="' + UIModule.escapeHtml(member.lastName || '') + '" aria-label="Last name" autocomplete="off" style="flex:1;min-width:0;">';
+              html += '</div></td>';
+              html += '<td><input id="me-dob" class="form-input" type="date" value="' + UIModule.escapeHtml(member.dateOfBirth || '') + '" aria-label="Date of birth"></td>';
+              html += '<td><select id="me-gender" class="form-input" aria-label="Gender">';
+              html += '<option value="male"' + (member.gender === 'male' ? ' selected' : '') + '>male</option>';
+              html += '<option value="female"' + (member.gender === 'female' ? ' selected' : '') + '>female</option>';
+              html += '<option value="other"' + (member.gender === 'other' ? ' selected' : '') + '>other</option>';
+              html += '<option value="unknown"' + (member.gender === 'unknown' ? ' selected' : '') + '>unknown</option>';
+              html += '</select></td>';
+              html += '<td><input id="me-member-id" class="form-input" type="text" value="' + UIModule.escapeHtml(member.memberIdAtOldPayer || '') + '" aria-label="Member ID at Previous Payer" autocomplete="off"></td>';
+              html += '<td><div class="roster-actions">';
+              html += '<button id="me-cancel" class="btn btn-secondary" type="button" data-member-id="' + mid + '">Cancel</button>';
+              html += '<button id="me-save" class="btn btn-primary" type="button" data-member-id="' + mid + '">Save</button>';
+              html += '</div></td>';
+              html += '</tr>';
+            } else if (UIModule._rosterDeleteConfirmMemberId === member.id) {
+              html += '<tr>';
+              html += '<td>' + memberName + '</td>';
+              html += '<td>' + UIModule.escapeHtml(member.dateOfBirth || '') + '</td>';
+              html += '<td>' + UIModule.escapeHtml(member.gender || '') + '</td>';
+              html += '<td>' + UIModule.escapeHtml(member.memberIdAtOldPayer || '') + '</td>';
+              html += '<td><div class="roster-actions" style="flex-wrap:wrap;gap:4px;">';
+              html += '<span style="font-size:12px;color:var(--color-text-secondary);white-space:nowrap;">Remove ' + memberName + ' from this roster?</span>';
+              html += '<button id="member-delete-cancel" class="roster-action-btn" type="button" data-member-id="' + mid + '">Cancel</button>';
+              html += '<button id="member-delete-confirm" class="roster-action-btn" style="background:#ef4444;color:#fff;border-color:#ef4444;" type="button" data-member-id="' + mid + '" data-payer-id="' + pid + '">Delete</button>';
+              html += '</div></td>';
+              html += '</tr>';
+            } else {
+              html += '<tr>';
+              html += '<td>' + memberName + '</td>';
+              html += '<td>' + UIModule.escapeHtml(member.dateOfBirth || '') + '</td>';
+              html += '<td>' + UIModule.escapeHtml(member.gender || '') + '</td>';
+              html += '<td>' + UIModule.escapeHtml(member.memberIdAtOldPayer || '') + '</td>';
+              html += '<td><div class="roster-actions">';
+              html += '<button class="roster-action-btn" data-member-id="' + mid + '" data-payer-id="' + pid + '" data-action="edit" type="button" aria-label="Edit ' + memberName + '">Edit</button>';
+              html += '<button class="roster-action-btn" data-member-id="' + mid + '" data-payer-id="' + pid + '" data-action="delete" type="button" aria-label="Delete ' + memberName + '">Delete</button>';
+              html += '</div></td>';
+              html += '</tr>';
+            }
           });
           if (adding) { html += addRow; }
           html += '</tbody></table>';
@@ -806,6 +845,8 @@
               UIModule._expandedPayerTab = 'config';
               UIModule._deleteConfirmPayerId = null;
               UIModule._rosterAddingMember = false;
+              UIModule._rosterEditingMemberId = null;
+              UIModule._rosterDeleteConfirmMemberId = null;
             }
             UIModule.showView('previous-payers');
           });
@@ -1053,6 +1094,98 @@
                 roster.push({ id: crypto.randomUUID(), firstName: fn, lastName: ln, dateOfBirth: dob, gender: gen, memberIdAtOldPayer: mid });
                 ConfigModule.updatePayer(maPayerId, { roster: roster });
                 UIModule._rosterAddingMember = false;
+                UIModule.showView('previous-payers');
+              });
+            }
+          }
+
+          // Wire edit action buttons (Story 2.3)
+          document.querySelectorAll('.roster-action-btn[data-action="edit"]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              UIModule._rosterAddingMember = false;
+              UIModule._rosterDeleteConfirmMemberId = null;
+              UIModule._rosterEditingMemberId = btn.dataset.memberId;
+              UIModule.showView('previous-payers');
+            });
+          });
+
+          // Wire delete action buttons (Story 2.3)
+          document.querySelectorAll('.roster-action-btn[data-action="delete"]').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+              UIModule._rosterAddingMember = false;
+              UIModule._rosterEditingMemberId = null;
+              UIModule._rosterDeleteConfirmMemberId = btn.dataset.memberId;
+              UIModule.showView('previous-payers');
+              var focusTarget = document.getElementById('member-delete-confirm');
+              if (focusTarget) focusTarget.focus();
+            });
+          });
+
+          // Wire edit form save/cancel (Story 2.3)
+          if (UIModule._rosterEditingMemberId) {
+            var meEditPayerId = UIModule._expandedPayerId;
+            var meEditMemberId = UIModule._rosterEditingMemberId;
+
+            var meMemberCancelBtn = document.getElementById('me-cancel');
+            if (meMemberCancelBtn) {
+              meMemberCancelBtn.addEventListener('click', function() {
+                UIModule._rosterEditingMemberId = null;
+                UIModule.showView('previous-payers');
+              });
+            }
+
+            var meMemberSaveBtn = document.getElementById('me-save');
+            if (meMemberSaveBtn) {
+              meMemberSaveBtn.addEventListener('click', function() {
+                var meFieldIds = ['me-first-name', 'me-last-name', 'me-dob', 'me-gender', 'me-member-id'];
+                meFieldIds.forEach(function(id) { var el = document.getElementById(id); if (el) el.classList.remove('invalid'); });
+                var meValid = true;
+                var meValues = {};
+                meFieldIds.forEach(function(id) {
+                  var el = document.getElementById(id);
+                  if (!el) return;
+                  var val = el.tagName === 'SELECT' ? el.value : el.value.trim();
+                  meValues[id] = val;
+                  if (!val) { el.classList.add('invalid'); meValid = false; }
+                });
+                if (!meValid) return;
+                var config = ConfigModule.getConfig();
+                var payer = config.previousPayers.find(function(p) { return p.id === meEditPayerId; });
+                if (!payer) return;
+                var updatedRoster = Array.isArray(payer.roster) ? payer.roster.map(function(m) {
+                  return m.id === meEditMemberId
+                    ? { id: m.id, firstName: meValues['me-first-name'], lastName: meValues['me-last-name'], dateOfBirth: meValues['me-dob'], gender: meValues['me-gender'], memberIdAtOldPayer: meValues['me-member-id'] }
+                    : m;
+                }) : [];
+                ConfigModule.updatePayer(meEditPayerId, { roster: updatedRoster });
+                UIModule._rosterEditingMemberId = null;
+                UIModule.showView('previous-payers');
+              });
+            }
+          }
+
+          // Wire delete confirm/cancel (Story 2.3)
+          if (UIModule._rosterDeleteConfirmMemberId) {
+            var meDeletePayerId = UIModule._expandedPayerId;
+            var meDeleteMemberId = UIModule._rosterDeleteConfirmMemberId;
+
+            var memberDeleteConfirmBtn = document.getElementById('member-delete-confirm');
+            if (memberDeleteConfirmBtn) {
+              memberDeleteConfirmBtn.addEventListener('click', function() {
+                var config = ConfigModule.getConfig();
+                var payer = config.previousPayers.find(function(p) { return p.id === meDeletePayerId; });
+                if (!payer) return;
+                var filteredRoster = Array.isArray(payer.roster) ? payer.roster.filter(function(m) { return m.id !== meDeleteMemberId; }) : [];
+                ConfigModule.updatePayer(meDeletePayerId, { roster: filteredRoster });
+                UIModule._rosterDeleteConfirmMemberId = null;
+                UIModule.showView('previous-payers');
+              });
+            }
+
+            var memberDeleteCancelBtn = document.getElementById('member-delete-cancel');
+            if (memberDeleteCancelBtn) {
+              memberDeleteCancelBtn.addEventListener('click', function() {
+                UIModule._rosterDeleteConfirmMemberId = null;
                 UIModule.showView('previous-payers');
               });
             }
