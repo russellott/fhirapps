@@ -369,6 +369,7 @@
     .roster-actions { display: flex; gap: 6px; }
     .roster-action-btn { background: none; border: 1px solid var(--color-border); border-radius: 4px; padding: 3px 8px; font-size: 12px; cursor: pointer; color: var(--color-text-secondary); white-space: nowrap; }
     .roster-action-btn:hover { color: var(--color-text-primary); background: var(--color-surface-alt); }
+    button:disabled, .btn:disabled { opacity: 0.5; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -480,6 +481,7 @@
       _expandedPayerTab: 'config',
       _deleteConfirmPayerId: null,
       _importPendingConfig: null,
+      _rosterAddingMember: false,
 
       escapeHtml: function(str) {
         return String(str)
@@ -496,6 +498,7 @@
           UIModule._expandedPayerId = null;
           UIModule._expandedPayerTab = 'config';
           UIModule._deleteConfirmPayerId = null;
+          UIModule._rosterAddingMember = false;
         }
         this.currentView = name;
         document.querySelectorAll('.nav-item').forEach(function(btn) {
@@ -658,17 +661,37 @@
 
       renderRosterTab: function(payer) {
         var roster = payer.roster || [];
+        var adding = UIModule._rosterAddingMember;
         var html = '';
-        if (roster.length === 0) {
+
+        var addRow = '<tr id="member-add-row">';
+        addRow += '<td><input id="ma-first-name" class="form-input" type="text" aria-label="First name" aria-required="true" autocomplete="off"></td>';
+        addRow += '<td><input id="ma-last-name" class="form-input" type="text" aria-label="Last name" aria-required="true" autocomplete="off"></td>';
+        addRow += '<td><input id="ma-dob" class="form-input" type="date" aria-label="Date of birth" aria-required="true"></td>';
+        addRow += '<td><select id="ma-gender" class="form-input" aria-label="Gender" aria-required="true">';
+        addRow += '<option value="" disabled selected>Select gender</option>';
+        addRow += '<option value="male">male</option><option value="female">female</option>';
+        addRow += '<option value="other">other</option><option value="unknown">unknown</option>';
+        addRow += '</select></td>';
+        addRow += '<td><input id="ma-member-id" class="form-input" type="text" aria-label="Member ID at Previous Payer" aria-required="true" autocomplete="off"></td>';
+        addRow += '<td><div class="roster-actions">';
+        addRow += '<button id="member-add-cancel" class="btn btn-secondary" type="button">Cancel</button>';
+        addRow += '<button id="member-add-save" class="btn btn-primary" type="button" disabled>Save</button>';
+        addRow += '</div></td>';
+        addRow += '</tr>';
+
+        if (roster.length === 0 && !adding) {
           html += '<div class="roster-empty-state">';
           html += '<p>No members in this roster. Add a member to enable exchanges with ' + UIModule.escapeHtml(payer.name) + '.</p>';
           html += '<button id="roster-add-btn" class="btn btn-secondary" type="button" data-payer-id="' + UIModule.escapeHtml(payer.id) + '">Add Member</button>';
           html += '</div>';
         } else {
           html += '<div class="roster-container">';
-          html += '<div class="roster-actions-bar">';
-          html += '<button id="roster-add-btn" class="btn btn-secondary" type="button" data-payer-id="' + UIModule.escapeHtml(payer.id) + '">Add Member</button>';
-          html += '</div>';
+          if (!adding) {
+            html += '<div class="roster-actions-bar">';
+            html += '<button id="roster-add-btn" class="btn btn-secondary" type="button" data-payer-id="' + UIModule.escapeHtml(payer.id) + '">Add Member</button>';
+            html += '</div>';
+          }
           html += '<table class="roster-table">';
           html += '<thead><tr>';
           html += '<th scope="col">Name</th><th scope="col">Date of Birth</th><th scope="col">Gender</th><th scope="col">Member ID at Previous Payer</th><th scope="col">Actions</th>';
@@ -687,6 +710,7 @@
             html += '</div></td>';
             html += '</tr>';
           });
+          if (adding) { html += addRow; }
           html += '</tbody></table>';
           html += '</div>';
         }
@@ -779,6 +803,7 @@
               UIModule._expandedPayerId = pid;
               UIModule._expandedPayerTab = 'config';
               UIModule._deleteConfirmPayerId = null;
+              UIModule._rosterAddingMember = false;
             }
             UIModule.showView('previous-payers');
           });
@@ -967,6 +992,68 @@
               UIModule._expandedPayerId = null;
               UIModule.showView('previous-payers');
             });
+          }
+        }
+
+        // Wire roster tab add-member form (Story 2.2)
+        if (UIModule._expandedPayerId && UIModule._expandedPayerId !== 'new' && UIModule._expandedPayerTab === 'roster') {
+          var rosterAddBtn = document.getElementById('roster-add-btn');
+          if (rosterAddBtn) {
+            rosterAddBtn.addEventListener('click', function() {
+              UIModule._rosterAddingMember = true;
+              UIModule.showView('previous-payers');
+            });
+          }
+
+          if (UIModule._rosterAddingMember) {
+            var maPayerId = UIModule._expandedPayerId;
+
+            function updateMaButtonState() {
+              var maFn = document.getElementById('ma-first-name');
+              var maLn = document.getElementById('ma-last-name');
+              var maDob = document.getElementById('ma-dob');
+              var maGen = document.getElementById('ma-gender');
+              var maMid = document.getElementById('ma-member-id');
+              var maSave = document.getElementById('member-add-save');
+              if (!maFn || !maSave) return;
+              maSave.disabled = !(maFn.value.trim() && maLn.value.trim() && maDob.value && maGen.value && maMid.value.trim());
+            }
+
+            ['ma-first-name', 'ma-last-name', 'ma-dob', 'ma-gender', 'ma-member-id'].forEach(function(fieldId) {
+              var el = document.getElementById(fieldId);
+              if (el) {
+                el.addEventListener('input', updateMaButtonState);
+                el.addEventListener('change', updateMaButtonState);
+              }
+            });
+
+            var maCancelBtn = document.getElementById('member-add-cancel');
+            if (maCancelBtn) {
+              maCancelBtn.addEventListener('click', function() {
+                UIModule._rosterAddingMember = false;
+                UIModule.showView('previous-payers');
+              });
+            }
+
+            var maSaveBtn = document.getElementById('member-add-save');
+            if (maSaveBtn) {
+              maSaveBtn.addEventListener('click', function() {
+                var fn = document.getElementById('ma-first-name').value.trim();
+                var ln = document.getElementById('ma-last-name').value.trim();
+                var dob = document.getElementById('ma-dob').value;
+                var gen = document.getElementById('ma-gender').value;
+                var mid = document.getElementById('ma-member-id').value.trim();
+                if (!fn || !ln || !dob || !gen || !mid) return;
+                var config = ConfigModule.getConfig();
+                var payer = config.previousPayers.find(function(p) { return p.id === maPayerId; });
+                if (!payer) return;
+                var roster = Array.isArray(payer.roster) ? payer.roster.slice() : [];
+                roster.push({ id: crypto.randomUUID(), firstName: fn, lastName: ln, dateOfBirth: dob, gender: gen, memberIdAtOldPayer: mid });
+                ConfigModule.updatePayer(maPayerId, { roster: roster });
+                UIModule._rosterAddingMember = false;
+                UIModule.showView('previous-payers');
+              });
+            }
           }
         }
       },
