@@ -2,8 +2,9 @@
 title: 'Story 3.2: ExchangeModule Scaffold & System Token (Step 1)'
 type: 'feature'
 created: '2026-07-31'
-status: 'in-review'
+status: 'done'
 baseline_revision: '2b629b1'
+final_revision: '58f4f54'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
@@ -178,6 +179,22 @@ context:
 - reject: 9
 - addressed_findings:
   - `[low]` `[patch]` `expires_in` type check used `typeof ... === 'number'` only; servers that return `expires_in` as a string (e.g. `"3600"`) silently dropped the expiry from the success message — fixed by accepting both `number` and numeric string, converting via `Number(expiresIn)` before display
+
+## Auto Run Result
+
+**Status:** done
+
+**Summary:** Replaced the ExchangeModule no-op stub with a full async scaffold. `_setStepState(stepNum, state, detailText)` updates step icon class and detail text by stable DOM IDs. `_acquireSystemToken` POSTs to `payer.tokenUrl` as `application/x-www-form-urlencoded` with `grant_type=client_credentials` and `scope=system/*.rs`; dispatches `client_secret_basic` (Authorization header) vs `client_secret_post` (body params) per AD-11; wraps URL with CORS proxy when `payer.useProxy === true`; catches all errors into structured `{ok, data, error}` returns per AD-7. On failure: sets step 1 failed, injects Try Again button into `#exchange-post-panel` via `innerHTML` and wires its click to reset `_exchangePhase` and re-render. On success: sets step 1 success with expiry text (handles both number and string `expires_in`). `exchange-post-panel` div added to progress panel HTML. Review patch: accepted string-typed `expires_in` from OAuth servers in addition to number type.
+
+**Files changed:**
+- `PayerToPayerClient/app.html` — ExchangeModule full implementation, exchange-post-panel div in progress tracker
+- `PayerToPayerClient/_bmad-output/implementation-artifacts/deferred-work.md` — 3 new entries (missing tokenUrl, null credentials, no fetch timeout)
+
+**Review findings:** 1 patch applied (low: expires_in type check). 3 deferred (all low). 9 rejected.
+
+**Follow-up review recommended:** false
+
+**Residual risks:** Steps 2–4 remain pending after a successful token acquisition — Stories 3.3–3.5 extend runExchange to complete the exchange.
 
 ## Verification
 
