@@ -796,8 +796,30 @@
       }
     };
 
-    // ResultsModule — stub; full implementation in Story 4.1
-    const ResultsModule = {};
+    const ResultsModule = {
+      generateNdjson: function(result) {
+        if (!result || !result.resourceResults) return '';
+        var lines = [];
+        result.resourceResults.forEach(function(r) {
+          if (r.count > 0 && r.entries) {
+            r.entries.forEach(function(entry) {
+              if (entry == null) return;
+              lines.push(JSON.stringify(entry.resource ? entry.resource : entry));
+            });
+          }
+        });
+        return lines.join('\n');
+      },
+      getFilename: function(result) {
+        var payer = result.payer || {};
+        var member = result.member || {};
+        var sanitize = function(s) { return (s || '').replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, ''); };
+        var payerName = sanitize(payer.name) || 'payer';
+        var lastName = sanitize(member.lastName) || 'unknown';
+        var firstName = sanitize(member.firstName) || 'unknown';
+        return payerName + '_' + lastName + '-' + firstName + '_' + (result.date || '') + '.ndjson';
+      }
+    };
 
     // DebugModule — stub; full implementation in Story 4.4
     const DebugModule = {};
@@ -1120,6 +1142,25 @@
             UIModule.showView('results');
           });
         });
+
+        var downloadBtn = document.getElementById('results-download-ndjson-btn');
+        if (downloadBtn) {
+          downloadBtn.addEventListener('click', function() {
+            var result = ExchangeModule._result;
+            if (!result) return;
+            var ndjson = ResultsModule.generateNdjson(result);
+            var filename = ResultsModule.getFilename(result);
+            var blob = new Blob([ndjson], { type: 'application/x-ndjson' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          });
+        }
 
         var explorerTabs = document.querySelectorAll('.explorer-tab:not([disabled])');
         explorerTabs.forEach(function(tab) {
