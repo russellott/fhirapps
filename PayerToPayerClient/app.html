@@ -632,6 +632,41 @@
         }
       },
 
+      _acquireMemberToken: async function(payer, fhirId, newPayerConfig) {
+        try {
+          var tokenUrl = payer.tokenUrl;
+          if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+            tokenUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(tokenUrl);
+          }
+          var body = new URLSearchParams();
+          body.set('grant_type', 'client_credentials');
+          body.set('scope', 'patient/' + fhirId + '.rs');
+          var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+          if (payer.tokenAuthMethod === 'client_secret_basic') {
+            headers['Authorization'] = 'Basic ' + btoa(payer.clientId + ':' + payer.clientSecret);
+          } else {
+            body.set('client_id', payer.clientId);
+            body.set('client_secret', payer.clientSecret);
+          }
+          var response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: headers,
+            body: body,
+            referrerPolicy: 'no-referrer'
+          });
+          if (!response.ok) {
+            return { ok: false, data: null, error: 'Member-scoped token not supported by this server — this Previous Payer\'s auth server may not support patient-scoped client credentials. Data retrieval cannot proceed.' };
+          }
+          var tokenData = await response.json();
+          if (!tokenData.access_token) {
+            return { ok: false, data: null, error: 'Member-scoped token not supported by this server — this Previous Payer\'s auth server may not support patient-scoped client credentials. Data retrieval cannot proceed.' };
+          }
+          return { ok: true, data: { memberToken: tokenData.access_token }, error: null };
+        } catch (err) {
+          return { ok: false, data: null, error: 'Member-scoped token not supported by this server — this Previous Payer\'s auth server may not support patient-scoped client credentials. Data retrieval cannot proceed.' };
+        }
+      },
+
       runExchange: async function(payer, member, newPayerConfig) {
         ExchangeModule._setStepState(1, 'in-progress', '');
         var step1 = await ExchangeModule._acquireSystemToken(payer, newPayerConfig);
@@ -655,7 +690,16 @@
         }
         ExchangeModule._setStepState(2, 'success', 'Member matched — FHIR ID: ' + step2.data.fhirId);
         var fhirId = step2.data.fhirId;
-        // Steps 3–4: pending — Story 3.4–3.5
+        ExchangeModule._setStepState(3, 'in-progress', '');
+        var step3 = await ExchangeModule._acquireMemberToken(payer, fhirId, newPayerConfig);
+        if (!step3.ok) {
+          ExchangeModule._setStepState(3, 'failed', step3.error);
+          ExchangeModule._showTryAgain();
+          return;
+        }
+        ExchangeModule._setStepState(3, 'success', 'Member-scoped token acquired — scope: patient/' + fhirId + '.rs');
+        var memberToken = step3.data.memberToken;
+        // Step 4: pending — Story 3.5
       }
     };
 
