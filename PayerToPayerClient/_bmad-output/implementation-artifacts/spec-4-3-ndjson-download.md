@@ -3,7 +3,7 @@ title: 'Story 4.3: NDJSON Download'
 type: 'feature'
 created: '2026-07-31'
 status: 'done'
-final_revision: 'pending'
+final_revision: '0f7b74f'
 baseline_revision: 'e37f2f5357449f52374379b46ed58b9b57c196d2'
 review_loop_iteration: 0
 followup_review_recommended: false
