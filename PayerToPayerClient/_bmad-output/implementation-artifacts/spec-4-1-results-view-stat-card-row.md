@@ -2,8 +2,9 @@
 title: 'Story 4.1: Results View & Stat Card Row'
 type: 'feature'
 created: '2026-07-31'
-status: 'in-review'
+status: 'done'
 baseline_revision: '31fcc2f'
+final_revision: 'e888e14'
 review_loop_iteration: 0
 followup_review_recommended: false
 context:
