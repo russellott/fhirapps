@@ -107,3 +107,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-5-resource-retrieval-exchange-completion.md`
   summary: No AbortController timeout on the 8 parallel resource fetches in _retrieveResources; a single hung FHIR server can leave step 4 in-progress indefinitely.
   evidence: Same class of issue as the step 1 token fetch timeout (deferred in Story 3.2). Fix: wrap each per-type fetch with a shared AbortController + 15–30s timeout. Low priority for demo tool.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-1-results-view-stat-card-row.md`
+  summary: Download NDJSON button renders as a primary CTA with no click handler and no disabled state, giving users zero feedback when clicked; wired in Story 4.3.
+  evidence: By-spec deferral; Story 4.3 owns the download logic. A button with no click handler silently does nothing, which is poor UX. Fix: add disabled attribute and tooltip until Story 4.3 lands, or render the button only after Story 4.3 is implemented.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-1-results-view-stat-card-row.md`
+  summary: Stat cards rendered as <div> elements with no role="button", tabindex, or keydown handler; unreachable by keyboard-only users.
+  evidence: Consistent with the demo tool's existing accessibility level (see deferred spec-1-1 entry on tabindex). Fix: add role="button" tabindex="0" to each card and a keydown handler for Enter/Space in bindResultsEvents().
