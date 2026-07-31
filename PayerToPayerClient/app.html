@@ -397,6 +397,24 @@
     .stat-card-count { font-size: 22px; font-weight: 700; line-height: 1; margin-bottom: 4px; color: var(--color-text-primary); }
     .stat-card-count.zero { color: var(--color-text-secondary); }
     .stat-card-type { font-size: 11px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .explorer-tab-bar { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--color-border); margin-top: 16px; }
+    .explorer-tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 8px 12px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--color-text-secondary); margin-bottom: -1px; white-space: nowrap; }
+    .explorer-tab.active { border-bottom-color: var(--color-primary); color: var(--color-primary); }
+    .explorer-tab:hover:not(.active):not([disabled]) { color: var(--color-text-primary); }
+    .explorer-tab[disabled] { opacity: 0.4; cursor: not-allowed; }
+    .explorer-content { margin-top: 12px; }
+    .explorer-nav { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .explorer-nav-count { font-size: 13px; color: var(--color-text-secondary); flex: 1; text-align: center; }
+    .explorer-zero { font-size: 14px; color: var(--color-text-secondary); padding: 24px 0; }
+    .json-viewer-wrap { position: relative; }
+    .json-copy-btn { position: absolute; top: 8px; right: 8px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 4px; padding: 3px 8px; font-size: 11px; cursor: pointer; color: var(--color-text-secondary); }
+    .json-copy-btn:hover { background: var(--color-surface-alt); }
+    .json-viewer { background: var(--color-surface-alt); border-radius: 12px; padding: 16px; font-family: monospace; font-size: 0.8rem; max-height: 480px; overflow-y: auto; white-space: pre; margin: 0; line-height: 1.4; }
+    .json-key { color: #17b3b3; }
+    .json-str { color: #22863a; }
+    .json-num { color: #005cc5; }
+    .json-bool { color: #e36209; }
+    .json-null { color: #e36209; }
   </style>
 </head>
 <body>
@@ -800,6 +818,8 @@
       _exchangeSelectedMemberId: null,
       _exchangePhase: 'setup',
       _resultsActiveTab: null,
+      _resultsActiveIndex: 0,
+      _resultsKeyHandler: null,
 
       escapeHtml: function(str) {
         return String(str)
@@ -808,6 +828,21 @@
           .replace(/>/g, '&gt;')
           .replace(/"/g, '&quot;')
           .replace(/'/g, '&#39;');
+      },
+
+      highlightJson: function(str) {
+        var escaped = str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return escaped.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function(match) {
+          var cls = 'json-num';
+          if (/^"/.test(match)) {
+            cls = /:$/.test(match) ? 'json-key' : 'json-str';
+          } else if (/true|false/.test(match)) {
+            cls = 'json-bool';
+          } else if (/null/.test(match)) {
+            cls = 'json-null';
+          }
+          return '<span class="' + cls + '">' + match + '</span>';
+        });
       },
 
       showView: function(name) {
@@ -820,6 +855,10 @@
             resultsNavBtn.setAttribute('aria-disabled', 'true');
             resultsNavBtn.setAttribute('tabindex', '-1');
           }
+        }
+        if (name !== 'results' && UIModule._resultsKeyHandler) {
+          document.removeEventListener('keydown', UIModule._resultsKeyHandler);
+          UIModule._resultsKeyHandler = null;
         }
         if (name === 'results' && !ExchangeModule.hasResult()) return;
         if (name !== 'previous-payers') {
@@ -1006,6 +1045,8 @@
         if (!activeType) {
           var firstNonEmpty = result.resourceResults.find(function(r) { return r.count > 0; });
           activeType = firstNonEmpty ? firstNonEmpty.resourceType : result.resourceResults[0].resourceType;
+          UIModule._resultsActiveTab = activeType;
+          UIModule._resultsActiveIndex = 0;
         }
         html += '<div class="stat-card-row">';
         result.resourceResults.forEach(function(r) {
@@ -1016,7 +1057,48 @@
           html += '</div>';
         });
         html += '</div>';
-        html += '<div id="results-explorer-panel"></div>';
+        html += UIModule.renderResourceExplorer(result, activeType);
+        html += '</div>';
+        return html;
+      },
+
+      renderResourceExplorer: function(result, activeType) {
+        var html = '';
+        html += '<div class="explorer-tab-bar">';
+        result.resourceResults.forEach(function(r) {
+          var isActive = r.resourceType === activeType;
+          html += '<button class="explorer-tab' + (isActive ? ' active' : '') + '"';
+          if (r.count === 0) { html += ' disabled'; }
+          html += ' data-type="' + UIModule.escapeHtml(r.resourceType) + '">';
+          html += UIModule.escapeHtml(r.resourceType);
+          html += '</button>';
+        });
+        html += '</div>';
+        html += '<div class="explorer-content">';
+        var activeResult = result.resourceResults.find(function(r) { return r.resourceType === activeType; });
+        if (!activeResult || activeResult.count === 0) {
+          html += '<p class="explorer-zero">No ' + UIModule.escapeHtml(activeType || '') + ' resources returned by this Previous Payer.</p>';
+        } else {
+          var entries = activeResult.entries || [];
+          if (entries.length === 0) {
+            html += '<p class="explorer-zero">No ' + UIModule.escapeHtml(activeType || '') + ' resources returned by this Previous Payer.</p>';
+            html += '</div>';
+            return html;
+          }
+          var currentIndex = Math.max(0, Math.min(UIModule._resultsActiveIndex, entries.length - 1));
+          var total = entries.length;
+          var entry = entries[currentIndex];
+          var resource = (entry && entry.resource) ? entry.resource : entry;
+          html += '<div class="explorer-nav">';
+          html += '<button id="explorer-prev-btn" class="btn btn-secondary" type="button"' + (currentIndex === 0 ? ' disabled' : '') + '>&#8592; Prev</button>';
+          html += '<span class="explorer-nav-count">' + (currentIndex + 1) + ' of ' + total + '</span>';
+          html += '<button id="explorer-next-btn" class="btn btn-secondary" type="button"' + (currentIndex === total - 1 ? ' disabled' : '') + '>Next &#8594;</button>';
+          html += '</div>';
+          html += '<div class="json-viewer-wrap">';
+          html += '<button id="json-copy-btn" class="json-copy-btn" type="button">Copy</button>';
+          html += '<pre id="json-viewer-pre" class="json-viewer">' + UIModule.highlightJson(JSON.stringify(resource, null, 2)) + '</pre>';
+          html += '</div>';
+        }
         html += '</div>';
         return html;
       },
@@ -1034,9 +1116,72 @@
         statCards.forEach(function(card) {
           card.addEventListener('click', function() {
             UIModule._resultsActiveTab = card.dataset.type || null;
+            UIModule._resultsActiveIndex = 0;
             UIModule.showView('results');
           });
         });
+
+        var explorerTabs = document.querySelectorAll('.explorer-tab:not([disabled])');
+        explorerTabs.forEach(function(tab) {
+          tab.addEventListener('click', function() {
+            UIModule._resultsActiveTab = tab.dataset.type;
+            UIModule._resultsActiveIndex = 0;
+            UIModule.showView('results');
+          });
+        });
+
+        var prevBtn = document.getElementById('explorer-prev-btn');
+        if (prevBtn) {
+          prevBtn.addEventListener('click', function() {
+            UIModule._resultsActiveIndex = Math.max(0, UIModule._resultsActiveIndex - 1);
+            UIModule.showView('results');
+          });
+        }
+
+        var nextBtn = document.getElementById('explorer-next-btn');
+        if (nextBtn) {
+          nextBtn.addEventListener('click', function() {
+            var result = ExchangeModule._result;
+            if (!result) return;
+            var activeResult = result.resourceResults.find(function(r) { return r.resourceType === UIModule._resultsActiveTab; });
+            if (!activeResult || !activeResult.entries) return;
+            UIModule._resultsActiveIndex = Math.min(activeResult.entries.length - 1, UIModule._resultsActiveIndex + 1);
+            UIModule.showView('results');
+          });
+        }
+
+        var copyBtn = document.getElementById('json-copy-btn');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', function() {
+            var pre = document.getElementById('json-viewer-pre');
+            if (!pre || !navigator.clipboard) return;
+            navigator.clipboard.writeText(pre.textContent).then(function() {
+              copyBtn.textContent = 'Copied!';
+              setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+            }).catch(function() {});
+          });
+        }
+
+        if (UIModule._resultsKeyHandler) {
+          document.removeEventListener('keydown', UIModule._resultsKeyHandler);
+        }
+        UIModule._resultsKeyHandler = function(e) {
+          if (UIModule.currentView !== 'results') return;
+          if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable) return;
+          var result = ExchangeModule._result;
+          if (!result) return;
+          var activeResult = result.resourceResults.find(function(r) { return r.resourceType === UIModule._resultsActiveTab; });
+          if (!activeResult || activeResult.count === 0 || !activeResult.entries) return;
+          var total = activeResult.entries.length;
+          if (e.key === 'ArrowLeft' && UIModule._resultsActiveIndex > 0) {
+            UIModule._resultsActiveIndex--;
+            UIModule.showView('results');
+          } else if (e.key === 'ArrowRight' && UIModule._resultsActiveIndex < total - 1) {
+            UIModule._resultsActiveIndex++;
+            UIModule.showView('results');
+          }
+        };
+        document.addEventListener('keydown', UIModule._resultsKeyHandler);
       },
 
       showAddPayer: function() {

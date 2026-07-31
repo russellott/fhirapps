@@ -115,3 +115,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-1-results-view-stat-card-row.md`
   summary: Stat cards rendered as <div> elements with no role="button", tabindex, or keydown handler; unreachable by keyboard-only users.
   evidence: Consistent with the demo tool's existing accessibility level (see deferred spec-1-1 entry on tabindex). Fix: add role="button" tabindex="0" to each card and a keydown handler for Enter/Space in bindResultsEvents().
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-2-resource-explorer-json-viewer.md`
+  summary: JSON syntax-highlight colors (#22863a strings, #005cc5 numbers) are GitHub Light theme hex values with no dark-mode CSS overrides; these colors have poor contrast on dark backgrounds.
+  evidence: Colors are spec-specified (from UX-DR13); the background (`var(--color-surface-alt)`) adapts to dark mode but the span colors don't. Fix: add `@media (prefers-color-scheme: dark)` overrides for `.json-str` and `.json-num` using lighter tones (e.g. `#56d364` and `#79c0ff`).
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-2-resource-explorer-json-viewer.md`
+  summary: Explorer tab bar uses `<button>` elements but lacks role="tablist" / role="tab" / aria-selected semantics; screen readers cannot identify the tab pattern.
+  evidence: Pre-existing accessibility pattern across the app (see deferred spec-1-1 entries). Fix: add role="tablist" to the tab bar container, role="tab" and aria-selected="true/false" to each tab button.
