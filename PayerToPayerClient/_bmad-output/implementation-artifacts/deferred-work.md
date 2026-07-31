@@ -87,3 +87,15 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-1-exchange-setup-panel.md`
   summary: `aria-live="polite"` on the step-tracker container won't announce step state changes driven by CSS class mutations; only text content changes inside the region are announced.
   evidence: Story 3.1 only renders static pending state; Story 3.2+ will add text content updates to step-detail elements which will be announced correctly. The class-only change gap will resolve naturally.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-exchangemodule-scaffold-system-token.md`
+  summary: `payer.tokenUrl` undefined or empty with proxy enabled wraps as `?url=undefined`; fetch to the proxy receives a nonsense URL with no early diagnostic.
+  evidence: Only reachable via corrupted localStorage or missing tokenUrl in payer config; tokenUrl is a required field in the Add Payer form. Same config-validation-gap pattern as deferred spec-1-4 URL validation item.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-exchangemodule-scaffold-system-token.md`
+  summary: Null or undefined clientId/clientSecret serializes as the literal string `"null"` in URLSearchParams body; server receives wrong credentials with no obvious diagnostic.
+  evidence: Only reachable via corrupted localStorage; credentials are required fields validated on save. Low practical risk for demo tool.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-2-exchangemodule-scaffold-system-token.md`
+  summary: No AbortController timeout on the token fetch; a hung auth server leaves step 1 in-progress state indefinitely with no user recovery path.
+  evidence: Realistic failure mode in connectathon/demo environments with flaky external servers. Fix: wrap fetch with AbortController + 15s timeout. Deferred as out-of-scope for Story 3.2; could be added in a hardening pass.

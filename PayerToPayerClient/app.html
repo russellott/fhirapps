@@ -479,10 +479,81 @@
       }
     };
 
-    // ExchangeModule — stub; full implementation in Story 3.2
+    // ExchangeModule — Story 3.2
     const ExchangeModule = {
       hasResult() { return false; },
-      runExchange: function(payer, member, newPayerConfig) {}
+
+      _setStepState: function(stepNum, state, detailText) {
+        var row = document.getElementById('step-row-' + stepNum);
+        if (!row) return;
+        var icon = row.querySelector('.step-icon');
+        if (icon) { icon.className = 'step-icon step-' + state; }
+        if (detailText !== undefined) {
+          var detail = document.getElementById('step-detail-' + stepNum);
+          if (detail) { detail.textContent = detailText; }
+        }
+      },
+
+      _acquireSystemToken: async function(payer, newPayerConfig) {
+        try {
+          var tokenUrl = payer.tokenUrl;
+          if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+            tokenUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(tokenUrl);
+          }
+          var body = new URLSearchParams();
+          body.set('grant_type', 'client_credentials');
+          body.set('scope', 'system/*.rs');
+          var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+          if (payer.tokenAuthMethod === 'client_secret_basic') {
+            headers['Authorization'] = 'Basic ' + btoa(payer.clientId + ':' + payer.clientSecret);
+          } else {
+            body.set('client_id', payer.clientId);
+            body.set('client_secret', payer.clientSecret);
+          }
+          var response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: headers,
+            body: body,
+            referrerPolicy: 'no-referrer'
+          });
+          if (!response.ok) {
+            return { ok: false, data: null, error: 'Token request failed: HTTP ' + response.status };
+          }
+          var tokenData = await response.json();
+          if (!tokenData.access_token) {
+            return { ok: false, data: null, error: 'Token response missing access_token' };
+          }
+          return { ok: true, data: tokenData, error: null };
+        } catch (err) {
+          return { ok: false, data: null, error: 'Token request error: ' + (err.message || String(err)) };
+        }
+      },
+
+      runExchange: async function(payer, member, newPayerConfig) {
+        ExchangeModule._setStepState(1, 'in-progress', '');
+        var step1 = await ExchangeModule._acquireSystemToken(payer, newPayerConfig);
+        if (!step1.ok) {
+          ExchangeModule._setStepState(1, 'failed', step1.error);
+          var postPanel = document.getElementById('exchange-post-panel');
+          if (postPanel) {
+            postPanel.innerHTML = '<button id="exchange-try-again-btn" class="btn btn-secondary" type="button">Try Again</button>';
+            var tryAgainBtn = document.getElementById('exchange-try-again-btn');
+            if (tryAgainBtn) {
+              tryAgainBtn.addEventListener('click', function() {
+                UIModule._exchangePhase = 'setup';
+                UIModule.showView('exchange');
+              });
+            }
+          }
+          return;
+        }
+        var expiresIn = step1.data.expires_in;
+        var successText = (typeof expiresIn === 'number' || (typeof expiresIn === 'string' && !isNaN(Number(expiresIn))))
+          ? 'Access token acquired — expires in ' + Number(expiresIn) + 's'
+          : 'Access token acquired';
+        ExchangeModule._setStepState(1, 'success', successText);
+        // Steps 2–4: pending — Story 3.3–3.5
+      }
     };
 
     // ResultsModule — stub; full implementation in Story 4.1
@@ -624,6 +695,7 @@
             html += '<div class="step-detail" id="step-detail-' + step.num + '"></div>';
             html += '</div></div>';
           });
+          html += '<div id="exchange-post-panel"></div>';
           html += '</div>';
         } else {
           // Setup panel
