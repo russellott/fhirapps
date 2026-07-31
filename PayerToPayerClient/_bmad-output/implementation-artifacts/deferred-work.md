@@ -123,3 +123,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-2-resource-explorer-json-viewer.md`
   summary: Explorer tab bar uses `<button>` elements but lacks role="tablist" / role="tab" / aria-selected semantics; screen readers cannot identify the tab pattern.
   evidence: Pre-existing accessibility pattern across the app (see deferred spec-1-1 entries). Fix: add role="tablist" to the tab bar container, role="tab" and aria-selected="true/false" to each tab button.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-ndjson-download.md`
+  summary: Download NDJSON button gives no user feedback when all resource types returned zero results — a zero-byte file is downloaded silently.
+  evidence: generateNdjson returns empty string; the handler proceeds to create a 0-byte Blob and trigger download with no explanation. Fix: add a guard after generateNdjson call — if ndjson is empty, show a brief status message instead of downloading.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-3-ndjson-download.md`
+  summary: generateNdjson has no try/catch around JSON.stringify; a circular reference in a FHIR resource would crash the download handler with an unhandled exception.
+  evidence: FHIR resources from real servers are unlikely to have circular references, but defensive wrapping is standard practice. Fix: wrap the JSON.stringify call in try/catch and skip the entry on error.
