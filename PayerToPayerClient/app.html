@@ -494,6 +494,20 @@
         }
       },
 
+      _showTryAgain: function() {
+        var postPanel = document.getElementById('exchange-post-panel');
+        if (postPanel) {
+          postPanel.innerHTML = '<button id="exchange-try-again-btn" class="btn btn-secondary" type="button">Try Again</button>';
+          var tryAgainBtn = document.getElementById('exchange-try-again-btn');
+          if (tryAgainBtn) {
+            tryAgainBtn.addEventListener('click', function() {
+              UIModule._exchangePhase = 'setup';
+              UIModule.showView('exchange');
+            });
+          }
+        }
+      },
+
       _acquireSystemToken: async function(payer, newPayerConfig) {
         try {
           var tokenUrl = payer.tokenUrl;
@@ -529,22 +543,101 @@
         }
       },
 
+      _runMemberMatch: async function(payer, member, systemToken, newPayerConfig) {
+        try {
+          var matchUrl = payer.fhirBaseUrl + '/Patient/$member-match';
+          if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+            matchUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(matchUrl);
+          }
+          var now = new Date().toISOString();
+          var fiveYearsAgo = new Date(Date.now() - 5 * 365.25 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          var parametersBody = {
+            resourceType: 'Parameters',
+            parameter: [
+              {
+                name: 'MemberPatient',
+                resource: {
+                  resourceType: 'Patient',
+                  name: [{ family: member.lastName, given: [member.firstName] }],
+                  birthDate: member.dateOfBirth,
+                  gender: member.gender
+                }
+              },
+              {
+                name: 'CoverageToMatch',
+                resource: {
+                  resourceType: 'Coverage',
+                  status: 'active',
+                  subscriberId: member.memberIdAtOldPayer,
+                  beneficiary: { display: member.firstName + ' ' + member.lastName },
+                  payor: [{ display: payer.name }]
+                }
+              },
+              {
+                name: 'CoverageToLink',
+                resource: {
+                  resourceType: 'Coverage',
+                  status: 'active',
+                  beneficiary: { display: member.firstName + ' ' + member.lastName },
+                  payor: [{ display: newPayerConfig.newPayer ? newPayerConfig.newPayer.name : '' }]
+                }
+              },
+              {
+                name: 'Consent',
+                resource: {
+                  resourceType: 'Consent',
+                  status: 'active',
+                  scope: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/consentscope', code: 'patient-privacy' }] },
+                  category: [{ coding: [{ system: 'http://loinc.org', code: '59284-0' }] }],
+                  dateTime: now,
+                  performer: [{ display: newPayerConfig.newPayer ? newPayerConfig.newPayer.name : '' }],
+                  organization: [{ display: payer.name }],
+                  provision: {
+                    type: 'permit',
+                    period: { start: fiveYearsAgo, end: now.slice(0, 10) },
+                    purpose: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-ActReason', code: 'TREAT' }]
+                  }
+                }
+              }
+            ]
+          };
+          var response = await fetch(matchUrl, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + systemToken, 'Content-Type': 'application/fhir+json' },
+            body: JSON.stringify(parametersBody),
+            referrerPolicy: 'no-referrer'
+          });
+          if (response.status === 422) {
+            var oo = await response.json();
+            var issues = (oo.issue || []);
+            var code = issues.length > 0 ? (issues[0].code || '') : '';
+            if (code === 'consent') {
+              return { ok: false, data: null, error: 'Consent denied by Previous Payer. Verify Consent resource construction.' };
+            }
+            return { ok: false, data: null, error: 'Member not found at Previous Payer — check demographics or member ID. Submitted: ' + member.firstName + ' ' + member.lastName + ', DOB ' + member.dateOfBirth + ', Member ID ' + member.memberIdAtOldPayer + '.' };
+          }
+          if (!response.ok) {
+            return { ok: false, data: null, error: 'Member match failed: HTTP ' + response.status };
+          }
+          var responseData = await response.json();
+          var params = (responseData.parameter || []);
+          var memberPatient = params.find(function(p) { return p.name === 'MemberPatient'; });
+          var fhirId = memberPatient && memberPatient.resource && memberPatient.resource.id;
+          if (!fhirId) {
+            return { ok: false, data: null, error: 'Member match response missing patient ID' };
+          }
+          return { ok: true, data: { fhirId: fhirId }, error: null };
+        } catch (err) {
+          return { ok: false, data: null, error: 'Member match error: ' + (err.message || String(err)) };
+        }
+      },
+
       runExchange: async function(payer, member, newPayerConfig) {
         ExchangeModule._setStepState(1, 'in-progress', '');
         var step1 = await ExchangeModule._acquireSystemToken(payer, newPayerConfig);
         if (!step1.ok) {
           ExchangeModule._setStepState(1, 'failed', step1.error);
-          var postPanel = document.getElementById('exchange-post-panel');
-          if (postPanel) {
-            postPanel.innerHTML = '<button id="exchange-try-again-btn" class="btn btn-secondary" type="button">Try Again</button>';
-            var tryAgainBtn = document.getElementById('exchange-try-again-btn');
-            if (tryAgainBtn) {
-              tryAgainBtn.addEventListener('click', function() {
-                UIModule._exchangePhase = 'setup';
-                UIModule.showView('exchange');
-              });
-            }
-          }
+          ExchangeModule._showTryAgain();
           return;
         }
         var expiresIn = step1.data.expires_in;
@@ -552,7 +645,17 @@
           ? 'Access token acquired — expires in ' + Number(expiresIn) + 's'
           : 'Access token acquired';
         ExchangeModule._setStepState(1, 'success', successText);
-        // Steps 2–4: pending — Story 3.3–3.5
+        var systemToken = step1.data.access_token;
+        ExchangeModule._setStepState(2, 'in-progress', '');
+        var step2 = await ExchangeModule._runMemberMatch(payer, member, systemToken, newPayerConfig);
+        if (!step2.ok) {
+          ExchangeModule._setStepState(2, 'failed', step2.error);
+          ExchangeModule._showTryAgain();
+          return;
+        }
+        ExchangeModule._setStepState(2, 'success', 'Member matched — FHIR ID: ' + step2.data.fhirId);
+        var fhirId = step2.data.fhirId;
+        // Steps 3–4: pending — Story 3.4–3.5
       }
     };
 
