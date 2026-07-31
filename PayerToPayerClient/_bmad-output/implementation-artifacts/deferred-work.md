@@ -71,3 +71,19 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-2-3-edit-delete-member.md`
   summary: Delete-confirm actions `<div>` uses inline `style="flex-wrap:wrap;gap:4px;"` beyond the spec; purely additive, no functional impact.
   evidence: Accepted as-is; fine to remove in a cleanup pass.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-exchange-setup-panel.md`
+  summary: renderExchange uses truthy check `config.previousPayers ?` instead of `Array.isArray`; a truthy non-array previousPayers would crash payers.forEach.
+  evidence: Only reachable via manual localStorage corruption; all code paths that write previousPayers use arrays. Same low-priority pattern as deferred spec-2-1 roster guard.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-exchange-setup-panel.md`
+  summary: No helper text explaining why the Previous Payer dropdown is empty when previousPayers array is empty; user sees only a disabled placeholder option with no guidance.
+  evidence: Spec specified setup panel with dropdowns only; low UX impact for a demo tool since users can navigate to Previous Payers to add one.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-exchange-setup-panel.md`
+  summary: Stale `_exchangeSelectedPayerId` or `_exchangeSelectedMemberId` after a payer is deleted from the Roster view; render silently falls back to disabled button state with no explanation.
+  evidence: Same stale-config pattern as existing deferred items across other specs; low practical risk for demo tool.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-1-exchange-setup-panel.md`
+  summary: `aria-live="polite"` on the step-tracker container won't announce step state changes driven by CSS class mutations; only text content changes inside the region are announced.
+  evidence: Story 3.1 only renders static pending state; Story 3.2+ will add text content updates to step-detail elements which will be announced correctly. The class-only change gap will resolve naturally.
