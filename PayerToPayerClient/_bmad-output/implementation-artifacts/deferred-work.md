@@ -99,3 +99,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-3-2-exchangemodule-scaffold-system-token.md`
   summary: No AbortController timeout on the token fetch; a hung auth server leaves step 1 in-progress state indefinitely with no user recovery path.
   evidence: Realistic failure mode in connectathon/demo environments with flaky external servers. Fix: wrap fetch with AbortController + 15s timeout. Deferred as out-of-scope for Story 3.2; could be added in a hardening pass.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-5-resource-retrieval-exchange-completion.md`
+  summary: Step detail sub-panel click behavior (FR-18) not implemented — completed/failed steps are not clickable to expand per-step detail panels.
+  evidence: Adds significant UI complexity (accordion pattern, step-scoped detail data); step detail text is already visible inline in the step-detail span. Epic 4 or a hardening story could add this. The step tracker HTML (step-row-N IDs) provides stable hooks for click handlers.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-3-5-resource-retrieval-exchange-completion.md`
+  summary: No AbortController timeout on the 8 parallel resource fetches in _retrieveResources; a single hung FHIR server can leave step 4 in-progress indefinitely.
+  evidence: Same class of issue as the step 1 token fetch timeout (deferred in Story 3.2). Fix: wrap each per-type fetch with a shared AbortController + 15–30s timeout. Low priority for demo tool.
