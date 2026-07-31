@@ -183,7 +183,7 @@
 
     /* View content */
     .view-container { max-width: 900px; }
-    .view-header { margin-bottom: 24px; }
+    .view-header { margin-bottom: 24px; display: flex; align-items: center; }
     .view-header h2 { font-size: 20px; font-weight: 600; }
     .empty-state {
       text-align: center;
@@ -388,6 +388,15 @@
     .step-content { flex: 1; }
     .step-name { font-weight: 500; font-size: 14px; }
     .step-detail { font-size: 12px; color: var(--color-text-secondary); margin-top: 2px; }
+
+    .results-header-actions { display: flex; gap: 8px; margin-left: auto; align-items: center; }
+    .stat-card-row { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 12px; }
+    .stat-card { flex-shrink: 0; width: 110px; background: var(--color-surface); border: 2px solid var(--color-border); border-radius: 8px; padding: 12px 10px; cursor: pointer; text-align: center; transition: border-color 0.15s; }
+    .stat-card:hover { border-color: var(--color-primary); }
+    .stat-card.active { border-color: var(--color-primary); background: var(--color-primary-light); }
+    .stat-card-count { font-size: 22px; font-weight: 700; line-height: 1; margin-bottom: 4px; color: var(--color-text-primary); }
+    .stat-card-count.zero { color: var(--color-text-secondary); }
+    .stat-card-type { font-size: 11px; color: var(--color-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -523,6 +532,7 @@
           if (newExchangeBtn) {
             newExchangeBtn.addEventListener('click', function() {
               ExchangeModule._result = null;
+              UIModule._resultsActiveTab = null;
               UIModule._exchangeSelectedPayerId = null;
               UIModule._exchangeSelectedMemberId = null;
               UIModule._exchangePhase = 'setup';
@@ -763,7 +773,7 @@
           return;
         }
         ExchangeModule._setStepState(4, 'success', step4.data.resourceResults.length + ' resource types queried — ' + step4.data.totalCount + ' resources retrieved');
-        ExchangeModule._result = { payer: payer, member: member, fhirId: fhirId, resourceResults: step4.data.resourceResults };
+        ExchangeModule._result = { payer: payer, member: member, fhirId: fhirId, resourceResults: step4.data.resourceResults, date: new Date().toISOString().slice(0, 10) };
         ExchangeModule._showPostExchangePanel();
       }
     };
@@ -789,6 +799,7 @@
       _exchangeSelectedPayerId: null,
       _exchangeSelectedMemberId: null,
       _exchangePhase: 'setup',
+      _resultsActiveTab: null,
 
       escapeHtml: function(str) {
         return String(str)
@@ -800,6 +811,16 @@
       },
 
       showView: function(name) {
+        var resultsNavBtn = document.querySelector('[data-view="results"]');
+        if (resultsNavBtn) {
+          if (ExchangeModule.hasResult()) {
+            resultsNavBtn.removeAttribute('aria-disabled');
+            resultsNavBtn.setAttribute('tabindex', '0');
+          } else {
+            resultsNavBtn.setAttribute('aria-disabled', 'true');
+            resultsNavBtn.setAttribute('tabindex', '-1');
+          }
+        }
         if (name === 'results' && !ExchangeModule.hasResult()) return;
         if (name !== 'previous-payers') {
           UIModule._expandedPayerId = null;
@@ -825,6 +846,7 @@
         main.innerHTML = html;
         if (name === 'previous-payers') { UIModule.bindPreviousPayersEvents(); }
         else if (name === 'exchange') { UIModule.bindExchangeEvents(); }
+        else if (name === 'results') { UIModule.bindResultsEvents(); }
       },
 
       renderPreviousPayers: function() {
@@ -972,11 +994,49 @@
       },
 
       renderResults: function() {
+        var result = ExchangeModule._result;
         var html = '<div class="view-container">';
-        html += '<div class="view-header"><h2>Results</h2></div>';
-        html += '<div class="empty-state"><p>Run an exchange to see results.</p></div>';
+        html += '<div class="view-header">';
+        html += '<h2>Results</h2>';
+        html += '<div class="results-header-actions">';
+        html += '<button id="results-new-exchange-btn" class="btn btn-secondary" type="button">New Exchange</button>';
+        html += '<button id="results-download-ndjson-btn" class="btn btn-primary" type="button">Download NDJSON</button>';
+        html += '</div></div>';
+        var activeType = UIModule._resultsActiveTab;
+        if (!activeType) {
+          var firstNonEmpty = result.resourceResults.find(function(r) { return r.count > 0; });
+          activeType = firstNonEmpty ? firstNonEmpty.resourceType : result.resourceResults[0].resourceType;
+        }
+        html += '<div class="stat-card-row">';
+        result.resourceResults.forEach(function(r) {
+          var isActive = r.resourceType === activeType;
+          html += '<div class="stat-card' + (isActive ? ' active' : '') + '" data-type="' + UIModule.escapeHtml(r.resourceType) + '">';
+          html += '<div class="stat-card-count' + (r.count === 0 ? ' zero' : '') + '">' + r.count + '</div>';
+          html += '<div class="stat-card-type">' + UIModule.escapeHtml(r.resourceType) + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+        html += '<div id="results-explorer-panel"></div>';
         html += '</div>';
         return html;
+      },
+
+      bindResultsEvents: function() {
+        var newExchangeBtn = document.getElementById('results-new-exchange-btn');
+        if (newExchangeBtn) {
+          newExchangeBtn.addEventListener('click', function() {
+            UIModule._resultsActiveTab = null;
+            UIModule._exchangePhase = 'setup';
+            UIModule.showView('exchange');
+          });
+        }
+        var statCards = document.querySelectorAll('.stat-card');
+        statCards.forEach(function(card) {
+          card.addEventListener('click', function() {
+            UIModule._resultsActiveTab = card.dataset.type || null;
+            UIModule.showView('results');
+          });
+        });
       },
 
       showAddPayer: function() {
