@@ -481,7 +481,8 @@
 
     // ExchangeModule — Story 3.2
     const ExchangeModule = {
-      hasResult() { return false; },
+      _result: null,
+      hasResult() { return !!ExchangeModule._result; },
 
       _setStepState: function(stepNum, state, detailText) {
         var row = document.getElementById('step-row-' + stepNum);
@@ -501,6 +502,29 @@
           var tryAgainBtn = document.getElementById('exchange-try-again-btn');
           if (tryAgainBtn) {
             tryAgainBtn.addEventListener('click', function() {
+              UIModule._exchangePhase = 'setup';
+              UIModule.showView('exchange');
+            });
+          }
+        }
+      },
+
+      _showPostExchangePanel: function() {
+        var postPanel = document.getElementById('exchange-post-panel');
+        if (postPanel) {
+          postPanel.innerHTML = '<button id="exchange-view-results-btn" class="btn btn-primary" type="button">View Results</button> <button id="exchange-new-exchange-btn" class="btn btn-secondary" type="button">Run New Exchange</button>';
+          var viewResultsBtn = document.getElementById('exchange-view-results-btn');
+          if (viewResultsBtn) {
+            viewResultsBtn.addEventListener('click', function() {
+              UIModule.showView('results');
+            });
+          }
+          var newExchangeBtn = document.getElementById('exchange-new-exchange-btn');
+          if (newExchangeBtn) {
+            newExchangeBtn.addEventListener('click', function() {
+              ExchangeModule._result = null;
+              UIModule._exchangeSelectedPayerId = null;
+              UIModule._exchangeSelectedMemberId = null;
               UIModule._exchangePhase = 'setup';
               UIModule.showView('exchange');
             });
@@ -667,7 +691,39 @@
         }
       },
 
+      _retrieveResources: async function(payer, fhirId, memberToken, newPayerConfig) {
+        try {
+          var resourceTypes = ['ExplanationOfBenefit', 'Condition', 'MedicationRequest', 'MedicationDispense', 'Observation', 'AllergyIntolerance', 'Immunization', 'Provenance'];
+          var resourceResults = await Promise.all(resourceTypes.map(async function(resourceType) {
+            try {
+              var url = payer.fhirBaseUrl + '/' + resourceType + '?patient=' + encodeURIComponent(fhirId);
+              if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+                url = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(url);
+              }
+              var response = await fetch(url, {
+                method: 'GET',
+                headers: { 'Authorization': 'Bearer ' + memberToken, 'Accept': 'application/fhir+json' },
+                referrerPolicy: 'no-referrer'
+              });
+              if (!response.ok) {
+                return { resourceType: resourceType, ok: false, count: 0, status: response.status, entries: [] };
+              }
+              var bundle = await response.json();
+              var entries = Array.isArray(bundle.entry) ? bundle.entry : [];
+              return { resourceType: resourceType, ok: true, count: entries.length, status: response.status, entries: entries };
+            } catch (err) {
+              return { resourceType: resourceType, ok: false, count: 0, status: 0, entries: [] };
+            }
+          }));
+          var totalCount = resourceResults.reduce(function(sum, r) { return sum + r.count; }, 0);
+          return { ok: true, data: { resourceResults: resourceResults, totalCount: totalCount }, error: null };
+        } catch (err) {
+          return { ok: false, data: null, error: 'Resource retrieval error: ' + (err.message || String(err)) };
+        }
+      },
+
       runExchange: async function(payer, member, newPayerConfig) {
+        ExchangeModule._result = null;
         ExchangeModule._setStepState(1, 'in-progress', '');
         var step1 = await ExchangeModule._acquireSystemToken(payer, newPayerConfig);
         if (!step1.ok) {
@@ -699,7 +755,16 @@
         }
         ExchangeModule._setStepState(3, 'success', 'Member-scoped token acquired — scope: patient/' + fhirId + '.rs');
         var memberToken = step3.data.memberToken;
-        // Step 4: pending — Story 3.5
+        ExchangeModule._setStepState(4, 'in-progress', '');
+        var step4 = await ExchangeModule._retrieveResources(payer, fhirId, memberToken, newPayerConfig);
+        if (!step4.ok) {
+          ExchangeModule._setStepState(4, 'failed', step4.error);
+          ExchangeModule._showTryAgain();
+          return;
+        }
+        ExchangeModule._setStepState(4, 'success', step4.data.resourceResults.length + ' resource types queried — ' + step4.data.totalCount + ' resources retrieved');
+        ExchangeModule._result = { payer: payer, member: member, fhirId: fhirId, resourceResults: step4.data.resourceResults };
+        ExchangeModule._showPostExchangePanel();
       }
     };
 
