@@ -2,8 +2,9 @@
 title: 'Story 3.1: Exchange Setup Panel'
 type: 'feature'
 created: '2026-07-31'
-status: 'in-review'
+status: 'done'
 baseline_revision: '31e4c1c'
+final_revision: '5155b48'
 review_loop_iteration: 0
 followup_review_recommended: false
 warnings:
@@ -142,3 +143,19 @@ context:
 - reject: 8
 - addressed_findings:
   - `[low]` `[patch]` `bindExchangeEvents` run button click handler missing null guard on `ConfigModule.getConfig()` return value; `config.previousPayers.find(...)` would throw TypeError if config is null — fixed by adding `if (!config || !Array.isArray(config.previousPayers)) return;` before the `.find()` call
+
+## Auto Run Result
+
+**Status:** done
+
+**Summary:** Replaced the Exchange view static stub with a two-phase setup panel and progress tracker. Setup panel renders Previous Payer and Member dropdowns populated from ConfigModule; member dropdown disabled until a payer is selected; summary line shows "Testing {payer} for {member} ({dob})" when both selected; Run Exchange button disabled until both selections are made. Clicking Run Exchange sets `_exchangePhase = 'running'`, swaps to 4-step progress tracker (all steps pending, stable `step-row-N` and `step-detail-N` IDs for Story 3.2 to target), then calls ExchangeModule.runExchange no-op stub. `bindExchangeEvents()` method added, wired from showView. Three new UIModule state properties added; none reset on nav-away by design. Review patch: added null guard on config before `config.previousPayers.find()` in run button click handler.
+
+**Files changed:**
+- `PayerToPayerClient/app.html` — modified; exchange CSS, step tracker CSS, UIModule state props, showView wiring, renderExchange full rewrite, bindExchangeEvents new method, ExchangeModule.runExchange stub
+- `PayerToPayerClient/_bmad-output/implementation-artifacts/deferred-work.md` — 4 new entries (truthy-not-Array.isArray guard, empty-state helper text, stale selection after deletion, aria-live class-only gap)
+
+**Review findings:** 1 patch applied (low: null guard). 4 deferred (all low). 8 rejected (by-design or non-issues).
+
+**Follow-up review recommended:** false
+
+**Residual risks:** Exchange execution (Stories 3.2–3.5) not yet implemented; progress tracker sits in permanent pending state after Run Exchange click until ExchangeModule.runExchange is implemented in Story 3.2.
