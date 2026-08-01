@@ -23,6 +23,16 @@ const FHIR_SERVERS = {
     clientSecret: 'demo-secret-change-me',
     tokenAuthMethod: 'client_secret_post',
     useProxy: true
+  },
+  cignaDevSandbox: {
+    name: 'Cigna Developer Sandbox',
+    fhirBaseUrl: 'https://fhir.cigna.com/PayerToPayer/v1-devportal',
+    tokenUrl: 'https://r-hi2.cigna.com/mga/sps/oauth/oauth20/token',
+    clientId: 'REDACTED_CIGNA_P2P_CLIENT_ID',
+    clientSecret: 'REDACTED_CIGNA_P2P_CLIENT_SECRET',
+    tokenAuthMethod: 'client_secret_basic',
+    scopeSuffix: '.read',  // Cigna uses SMART v1 scope syntax (system/*.read, patient/*.read)
+    useProxy: true
   }
 };
 // Client secrets above are intentionally visible — demo/testing use only
