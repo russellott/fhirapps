@@ -6,6 +6,7 @@ status: 'done'
 baseline_revision: 'd7fb818b70f5d18cd54f3d2b7587ddb170a529ab'
 review_loop_iteration: 0
 followup_review_recommended: false
+final_revision: '4eb6dce'
 context:
   - '_bmad-output/project-context.md'
   - '_bmad-output/implementation-artifacts/epic-4-context.md'
