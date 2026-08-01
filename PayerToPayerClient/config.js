@@ -27,11 +27,12 @@ const FHIR_SERVERS = {
   cignaDevSandbox: {
     name: 'Cigna Developer Sandbox',
     fhirBaseUrl: 'https://fhir.cigna.com/PayerToPayer/v1-devportal',
-    tokenUrl: 'https://r-hi2.cigna.com/mga/sps/oauth/oauth20/token',
+    tokenUrl: 'https://fhir.cigna.com/PayerToPayer/v1-devportal/oauth2/token',
     clientId: '9ffe6e94-9a21-473d-8e7b-759b4c431b13',
     clientSecret: '706170b4-3f2f-464f-8acd-6b1eeb84aa7c',
-    tokenAuthMethod: 'client_secret_basic',
-    scopeSuffix: '.read',  // Cigna uses SMART v1 scope syntax (system/*.read, patient/*.read)
+    tokenAuthMethod: 'client_secret_post',
+    // Cigna requires an explicit per-resource scope list rather than system/*.read or system/*.rs
+    systemScope: 'patient/Patient.read patient/AllergyIntolerance.read patient/CarePlan.read patient/CareTeam.read patient/Condition.read patient/Device.read patient/DiagnosticReport.read patient/DocumentReference.read patient/Encounter.read patient/Goal.read patient/Immunization.read patient/Location.read patient/Medication.read patient/MedicationDispense.read patient/MedicationRequest.read patient/Observation.read patient/Organization.read patient/Practitioner.read patient/PractitionerRole.read patient/Procedure.read patient/Provenance.read',
     useProxy: true
   }
 };
