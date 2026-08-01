@@ -19,9 +19,9 @@ const FHIR_SERVERS = {
 
     // MT Medicaid UAT Environment (HealthInteractive / Keycloak)
     deloitte: {
-        name: "MT Medicaid UAT Environment",
-        clientId: "w2H7YSqKymzH3MBH",
-        clientSecret: "SPRNXsCIuwOLFxXBuTg5mGMPl9nr1CEl",
+        name: "MT Medicaid Sandbox Environment",
+        clientId: "pXvr4dePyqNheYuc",
+        clientSecret: "Al4Kp0m2QCH1Y6D8mrMZXetIvSbit0ly",
         usePkce: false,
         tokenAuthMethod: "client_secret_post",
         tokenReferrerPolicy: "no-referrer",
@@ -31,16 +31,16 @@ const FHIR_SERVERS = {
         redirectUri: `${APP_BASE_URL}/app.html`,
         launchUri: `${APP_BASE_URL}/launch.html`,
         // Keycloak realm ISS (used for OAuth authorize / token endpoints)
-        iss: "https://auth.platform.uat.mt.healthinteractive.net/realms/authu",
-        authorizeUrl: "https://auth.platform.uat.mt.healthinteractive.net/realms/authu/protocol/openid-connect/auth",
-        tokenUrl: "https://auth.platform.uat.mt.healthinteractive.net/realms/authu/protocol/openid-connect/token",
+        iss: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authd",
+        authorizeUrl: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authd/protocol/openid-connect/auth",
+        tokenUrl: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authd/protocol/openid-connect/token",
         // FHIR base URL — the actual data endpoint (different from the Keycloak ISS)
-        fhirBaseUrl: "https://deloitte.connectathons.com",
+        fhirBaseUrl: "https://api.platform.sbx.mt.healthinteractive.net/patient-access/",
         // Enable OIDC auto-discovery as fallback (will fetch .well-known/openid-configuration)
         useOidcDiscovery: true,
         // Route token exchange through CORS proxy (server does not send Access-Control-Allow-Origin)
         useCorsProxy: true,
-        description: "Deloitte connectathon sandbox server with sample patients (R4)",
+        description: "MT Medicaid sandbox server with sample patients (R4)",
         requiresStateNonce: true,
         useNumericStateNonce: true,
         expectedOrigin: APP_ORIGIN
