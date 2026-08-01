@@ -583,7 +583,7 @@
           }
           var body = new URLSearchParams();
           body.set('grant_type', 'client_credentials');
-          body.set('scope', 'system/*' + (payer.scopeSuffix || '.rs'));
+          body.set('scope', payer.systemScope || ('system/*' + (payer.scopeSuffix || '.rs')));
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
           if (payer.tokenAuthMethod === 'client_secret_basic') {
             headers['Authorization'] = 'Basic ' + btoa(payer.clientId + ':' + payer.clientSecret);
