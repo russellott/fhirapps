@@ -599,7 +599,9 @@
             referrerPolicy: 'no-referrer'
           });
           if (!response.ok) {
-            DebugModule.appendEntry({ step: 1, request: reqData, response: { status: response.status, body: null } });
+            var errBody = null;
+            try { errBody = await response.json(); } catch (_) { try { errBody = await response.text(); } catch (_) {} }
+            DebugModule.appendEntry({ step: 1, request: reqData, response: { status: response.status, body: errBody } });
             return { ok: false, data: null, error: 'Token request failed: HTTP ' + response.status };
           }
           var tokenData = await response.json();
@@ -609,6 +611,7 @@
           }
           return { ok: true, data: tokenData, error: null };
         } catch (err) {
+          DebugModule.appendEntry({ step: 1, request: reqData || { method: 'POST', url: payer.tokenUrl, headers: {}, body: '' }, response: { status: 0, body: err.message || String(err) } });
           return { ok: false, data: null, error: 'Token request error: ' + (err.message || String(err)) };
         }
       },
@@ -1960,7 +1963,7 @@
             if (!payer || !member) return;
             UIModule._exchangePhase = 'running';
             UIModule.showView('exchange');
-            ExchangeModule.runExchange(payer, member, { newPayer: config.newPayer, corsProxyUrl: config.corsProxyUrl });
+            ExchangeModule.runExchange(payer, member, { newPayer: config.newPayer, corsProxyUrl: config.corsProxyUrl || CORS_PROXY_URL });
           });
         }
 
