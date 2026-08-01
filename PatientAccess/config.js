@@ -31,9 +31,9 @@ const FHIR_SERVERS = {
         redirectUri: `${APP_BASE_URL}/app.html`,
         launchUri: `${APP_BASE_URL}/launch.html`,
         // Keycloak realm ISS (used for OAuth authorize / token endpoints)
-        iss: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authd",
-        authorizeUrl: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authd/protocol/openid-connect/auth",
-        tokenUrl: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authd/protocol/openid-connect/token",
+        iss: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authsbx",
+        authorizeUrl: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authsbx/protocol/openid-connect/auth",
+        tokenUrl: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authsbx/protocol/openid-connect/token",
         // FHIR base URL — the actual data endpoint (different from the Keycloak ISS)
         fhirBaseUrl: "https://api.platform.sbx.mt.healthinteractive.net/patient-access/",
         // Enable OIDC auto-discovery as fallback (will fetch .well-known/openid-configuration)
