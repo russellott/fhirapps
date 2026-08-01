@@ -415,6 +415,21 @@
     .json-num { color: #005cc5; }
     .json-bool { color: #e36209; }
     .json-null { color: #e36209; }
+    .debug-panel { margin-top: 24px; background: #263238; color: #aed581; font-family: monospace; font-size: 12px; border-radius: 8px; overflow: hidden; max-height: 40px; transition: max-height 150ms ease; }
+    .debug-panel.open { max-height: 280px; }
+    .debug-panel-header { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 40px; cursor: pointer; user-select: none; font-weight: 500; font-size: 13px; flex-shrink: 0; }
+    .debug-count { background: #37474f; border-radius: 10px; padding: 2px 7px; font-size: 11px; margin-left: auto; color: #aed581; }
+    .debug-panel-body { height: 240px; overflow-y: auto; border-top: 1px solid #37474f; }
+    .debug-entry { border-bottom: 1px solid #37474f; }
+    .debug-entry:nth-child(even) { background: #1e272e; }
+    .debug-entry summary { padding: 5px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; list-style: none; }
+    .debug-step { color: #80cbc4; margin-right: 6px; }
+    .debug-method { color: #b0bec5; font-weight: 600; margin-right: 6px; }
+    .debug-url { color: #aed581; margin-right: 6px; }
+    .debug-ok { color: #a5d6a7; }
+    .debug-err { color: #ef9a9a; }
+    .debug-detail { padding: 8px 12px; font-size: 11px; white-space: pre-wrap; word-break: break-all; background: #1a2329; margin: 0; color: #b0bec5; border-top: 1px solid #37474f; }
+    .debug-empty { padding: 12px; color: #546e7a; font-style: italic; }
   </style>
 </head>
 <body>
@@ -576,6 +591,7 @@
             body.set('client_id', payer.clientId);
             body.set('client_secret', payer.clientSecret);
           }
+          var reqData = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
             method: 'POST',
             headers: headers,
@@ -583,9 +599,11 @@
             referrerPolicy: 'no-referrer'
           });
           if (!response.ok) {
+            DebugModule.appendEntry({ step: 1, request: reqData, response: { status: response.status, body: null } });
             return { ok: false, data: null, error: 'Token request failed: HTTP ' + response.status };
           }
           var tokenData = await response.json();
+          DebugModule.appendEntry({ step: 1, request: reqData, response: { status: response.status, body: tokenData } });
           if (!tokenData.access_token) {
             return { ok: false, data: null, error: 'Token response missing access_token' };
           }
@@ -653,6 +671,7 @@
               }
             ]
           };
+          var reqData2 = { method: 'POST', url: matchUrl, headers: { 'Authorization': 'Bearer ' + systemToken, 'Content-Type': 'application/fhir+json' }, body: JSON.stringify(parametersBody) };
           var response = await fetch(matchUrl, {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + systemToken, 'Content-Type': 'application/fhir+json' },
@@ -661,6 +680,7 @@
           });
           if (response.status === 422) {
             var oo = await response.json();
+            DebugModule.appendEntry({ step: 2, request: reqData2, response: { status: 422, body: oo } });
             var issues = (oo.issue || []);
             var code = issues.length > 0 ? (issues[0].code || '') : '';
             if (code === 'consent') {
@@ -669,9 +689,11 @@
             return { ok: false, data: null, error: 'Member not found at Previous Payer — check demographics or member ID. Submitted: ' + member.firstName + ' ' + member.lastName + ', DOB ' + member.dateOfBirth + ', Member ID ' + member.memberIdAtOldPayer + '.' };
           }
           if (!response.ok) {
+            DebugModule.appendEntry({ step: 2, request: reqData2, response: { status: response.status, body: null } });
             return { ok: false, data: null, error: 'Member match failed: HTTP ' + response.status };
           }
           var responseData = await response.json();
+          DebugModule.appendEntry({ step: 2, request: reqData2, response: { status: response.status, body: responseData } });
           var params = (responseData.parameter || []);
           var memberPatient = params.find(function(p) { return p.name === 'MemberPatient'; });
           var fhirId = memberPatient && memberPatient.resource && memberPatient.resource.id;
@@ -700,6 +722,7 @@
             body.set('client_id', payer.clientId);
             body.set('client_secret', payer.clientSecret);
           }
+          var reqData3 = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
             method: 'POST',
             headers: headers,
@@ -707,9 +730,11 @@
             referrerPolicy: 'no-referrer'
           });
           if (!response.ok) {
+            DebugModule.appendEntry({ step: 3, request: reqData3, response: { status: response.status, body: null } });
             return { ok: false, data: null, error: 'Member-scoped token not supported by this server — this Previous Payer\'s auth server may not support patient-scoped client credentials. Data retrieval cannot proceed.' };
           }
           var tokenData = await response.json();
+          DebugModule.appendEntry({ step: 3, request: reqData3, response: { status: response.status, body: tokenData } });
           if (!tokenData.access_token) {
             return { ok: false, data: null, error: 'Member-scoped token not supported by this server — this Previous Payer\'s auth server may not support patient-scoped client credentials. Data retrieval cannot proceed.' };
           }
@@ -728,15 +753,18 @@
               if (payer.useProxy && newPayerConfig.corsProxyUrl) {
                 url = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(url);
               }
+              var reqData4 = { method: 'GET', url: url, headers: { 'Authorization': 'Bearer ' + memberToken, 'Accept': 'application/fhir+json' }, body: null };
               var response = await fetch(url, {
                 method: 'GET',
                 headers: { 'Authorization': 'Bearer ' + memberToken, 'Accept': 'application/fhir+json' },
                 referrerPolicy: 'no-referrer'
               });
               if (!response.ok) {
+                DebugModule.appendEntry({ step: 4, request: reqData4, response: { status: response.status, body: null } });
                 return { resourceType: resourceType, ok: false, count: 0, status: response.status, entries: [] };
               }
               var bundle = await response.json();
+              DebugModule.appendEntry({ step: 4, request: reqData4, response: { status: response.status, body: bundle } });
               var entries = Array.isArray(bundle.entry) ? bundle.entry : [];
               return { resourceType: resourceType, ok: true, count: entries.length, status: response.status, entries: entries };
             } catch (err) {
@@ -821,8 +849,86 @@
       }
     };
 
-    // DebugModule — stub; full implementation in Story 4.4
-    const DebugModule = {};
+    const DebugModule = {
+      _entries: [],
+      _open: false,
+
+      _escape: function(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      },
+
+      _redact: function(entry) {
+        var safe;
+        try { safe = JSON.parse(JSON.stringify(entry)); } catch (e) { safe = { step: entry.step, request: { method: entry.request && entry.request.method, url: entry.request && entry.request.url, headers: {}, body: null }, response: { status: entry.response && entry.response.status, body: null } }; }
+        // Redact Authorization: Basic header (show first 4 chars of base64 + ****)
+        if (safe.request && safe.request.headers) {
+          var auth = safe.request.headers['Authorization'];
+          if (typeof auth === 'string' && auth.indexOf('Basic ') === 0) {
+            var b64 = auth.slice(6);
+            safe.request.headers['Authorization'] = 'Basic ' + b64.slice(0, 4) + '****';
+          }
+        }
+        // Redact client_secret in URL-encoded request body
+        if (typeof safe.request.body === 'string') {
+          safe.request.body = safe.request.body.replace(
+            /(client_secret=)([^&]{0,4})([^&]*)/g,
+            function(m, prefix, first4) { return prefix + first4 + '****'; }
+          );
+        }
+        // Remove access_token from response body
+        if (safe.response && safe.response.body && typeof safe.response.body === 'object') {
+          delete safe.response.body.access_token;
+        }
+        return safe;
+      },
+
+      _renderEntries: function() {
+        if (DebugModule._entries.length === 0) {
+          return '<div class="debug-empty">No entries yet — run an exchange to populate.</div>';
+        }
+        var html = '';
+        DebugModule._entries.forEach(function(e) {
+          var status = e.response ? e.response.status : 0;
+          var isOk = status >= 200 && status < 300;
+          html += '<details class="debug-entry">';
+          html += '<summary>';
+          html += '<span class="debug-step">Step ' + DebugModule._escape(e.step) + '</span>';
+          html += '<span class="debug-method">' + DebugModule._escape(e.request.method) + '</span>';
+          html += '<span class="debug-url">' + DebugModule._escape(e.request.url) + '</span>';
+          html += '<span class="' + (isOk ? 'debug-ok' : 'debug-err') + '">' + DebugModule._escape(status) + '</span>';
+          html += '</summary>';
+          html += '<pre class="debug-detail">' + DebugModule._escape(JSON.stringify(e, null, 2)) + '</pre>';
+          html += '</details>';
+        });
+        return html;
+      },
+
+      appendEntry: function(entry) {
+        var safe = DebugModule._redact(entry);
+        DebugModule._entries.push(safe);
+        var bodyEl = document.getElementById('debug-panel-body');
+        if (bodyEl) { bodyEl.innerHTML = DebugModule._renderEntries(); }
+        var countEl = document.getElementById('debug-count');
+        if (countEl) { countEl.textContent = DebugModule._entries.length; }
+      },
+
+      render: function() {
+        var open = DebugModule._open;
+        var count = DebugModule._entries.length;
+        var html = '<div class="debug-panel' + (open ? ' open' : '') + '" id="debug-panel">';
+        html += '<div class="debug-panel-header" id="debug-panel-toggle">';
+        html += '<span id="debug-toggle-icon">' + (open ? '▼' : '►') + '</span>';
+        html += ' Debug Panel';
+        html += '<span class="debug-count" id="debug-count">' + count + '</span>';
+        html += '</div>';
+        html += '<div class="debug-panel-body" id="debug-panel-body">';
+        html += DebugModule._renderEntries();
+        html += '</div>';
+        html += '</div>';
+        return html;
+      }
+    };
 
     // UIModule — view routing and event binding
     const UIModule = {
@@ -1050,6 +1156,7 @@
           html += '</div>';
         }
 
+        html += DebugModule.render();
         html += '</div>';
         return html;
       },
@@ -1854,6 +1961,17 @@
             UIModule._exchangePhase = 'running';
             UIModule.showView('exchange');
             ExchangeModule.runExchange(payer, member, { newPayer: config.newPayer, corsProxyUrl: config.corsProxyUrl });
+          });
+        }
+
+        var debugToggle = document.getElementById('debug-panel-toggle');
+        if (debugToggle) {
+          debugToggle.addEventListener('click', function() {
+            DebugModule._open = !DebugModule._open;
+            var panel = document.getElementById('debug-panel');
+            if (panel) { panel.classList.toggle('open', DebugModule._open); }
+            var icon = document.getElementById('debug-toggle-icon');
+            if (icon) { icon.textContent = DebugModule._open ? '▼' : '►'; }
           });
         }
       },
