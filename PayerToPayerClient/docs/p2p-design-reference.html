@@ -1,0 +1,2983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P2P Exchange Tester — Solution Design Reference</title>
+<style>
+/* ─── DESIGN TOKENS ─────────────────────────────────────────────────────── */
+:root {
+  --bg:        #f2f7fb;
+  --surface:   #ffffff;
+  --surface-2: #e8f1f8;
+  --border:    #cdd9e6;
+  --border-2:  #a8bfce;
+  --text:      #0c2133;
+  --text-2:    #3c5970;
+  --text-3:    #6e8fa6;
+  --teal:      #17b3b3;
+  --teal-dk:   #0f8a8a;
+  --teal-lt:   #e1f5f5;
+  --teal-sf:   #eefafa;
+  --code-bg:   #0d1e2e;
+  --code-text: #cde0ee;
+  --sidebar-w: 258px;
+  --c-research:   #7c6ef7;
+  --c-prd:        #e09626;
+  --c-design:     #d4599a;
+  --c-experience: #17b3b3;
+  --c-arch:       #3b8ed4;
+  --c-epics:      #2cb870;
+  --ff: system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  --fm: 'JetBrains Mono','Fira Code','Cascadia Code',Consolas,'Courier New',monospace;
+}
+@media (prefers-color-scheme: dark) { :root {
+  --bg:        #091620;
+  --surface:   #0e1f30;
+  --surface-2: #132840;
+  --border:    #1b3350;
+  --border-2:  #254868;
+  --text:      #c6dcea;
+  --text-2:    #688eaa;
+  --text-3:    #354f65;
+  --teal:      #2dcccc;
+  --teal-dk:   #1aabab;
+  --teal-lt:   #082626;
+  --teal-sf:   #051818;
+  --code-bg:   #050d18;
+  --code-text: #b6d2e6;
+}}
+:root[data-theme="dark"] {
+  --bg:#091620;--surface:#0e1f30;--surface-2:#132840;--border:#1b3350;
+  --border-2:#254868;--text:#c6dcea;--text-2:#688eaa;--text-3:#354f65;
+  --teal:#2dcccc;--teal-dk:#1aabab;--teal-lt:#082626;--teal-sf:#051818;
+  --code-bg:#050d18;--code-text:#b6d2e6;
+}
+:root[data-theme="light"] {
+  --bg:#f2f7fb;--surface:#ffffff;--surface-2:#e8f1f8;--border:#cdd9e6;
+  --border-2:#a8bfce;--text:#0c2133;--text-2:#3c5970;--text-3:#6e8fa6;
+  --teal:#17b3b3;--teal-dk:#0f8a8a;--teal-lt:#e1f5f5;--teal-sf:#eefafa;
+  --code-bg:#0d1e2e;--code-text:#cde0ee;
+}
+
+/* ─── RESET ──────────────────────────────────────────────────────────────── */
+*,*::before,*::after { box-sizing: border-box; }
+html,body { margin:0; padding:0; }
+body { font-family:var(--ff); font-size:15px; background:var(--bg); color:var(--text); line-height:1.65; }
+a { color:var(--teal); text-decoration:none; }
+a:hover { text-decoration:underline; }
+
+/* ─── LAYOUT ─────────────────────────────────────────────────────────────── */
+#app { display:grid; grid-template-columns:var(--sidebar-w) 1fr; min-height:100vh; }
+
+/* ─── SIDEBAR ────────────────────────────────────────────────────────────── */
+#sidebar {
+  position:sticky; top:0; height:100vh; overflow-y:auto;
+  background:var(--surface); border-right:1px solid var(--border);
+  display:flex; flex-direction:column;
+}
+.sb-top { padding:22px 18px 16px; border-bottom:1px solid var(--border); }
+.sb-mark {
+  display:grid; grid-template-columns:1fr 1fr; gap:3px;
+  width:24px; height:24px; margin-bottom:14px;
+}
+.sb-mark span { border-radius:3px; background:var(--teal); }
+.sb-mark span:nth-child(2), .sb-mark span:nth-child(3) { background:var(--teal-dk); }
+.sb-mark span:nth-child(4) { opacity:.45; }
+.sb-heading { font-size:.8rem; font-weight:700; line-height:1.3; letter-spacing:-.01em; margin-bottom:10px; }
+.sb-chips { display:flex; flex-wrap:wrap; gap:5px; }
+.sb-chip { font-size:.6rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; border-radius:3px; padding:2px 7px; }
+.sb-chip-ok { background:var(--teal-lt); color:var(--teal-dk); }
+.sb-chip-dt { background:var(--surface-2); color:var(--text-2); }
+
+#nav { flex:1; padding:10px 8px; }
+.nav-lnk {
+  display:flex; align-items:baseline; gap:9px;
+  padding:7px 10px; border-radius:5px;
+  font-size:.8125rem; font-weight:500; color:var(--text-2);
+  border-left:2px solid transparent;
+  transition:background 120ms, color 120ms;
+  text-decoration:none; margin-bottom:1px;
+}
+.nav-lnk:hover { background:var(--bg); color:var(--text); text-decoration:none; }
+.nav-lnk.on {
+  background:var(--teal-lt); color:var(--teal-dk);
+  font-weight:600; border-left-color:var(--teal);
+}
+.nav-n { font-size:.6rem; font-weight:700; color:var(--text-3); min-width:20px; letter-spacing:.03em; flex-shrink:0; }
+.nav-lnk.on .nav-n { color:var(--teal); }
+
+/* ─── MAIN ───────────────────────────────────────────────────────────────── */
+#content { min-width:0; }
+
+/* ─── COVER ──────────────────────────────────────────────────────────────── */
+#cover {
+  background:var(--surface);
+  border-bottom:2px solid var(--border);
+  padding:52px 60px 50px;
+}
+.cov-eye { font-size:.6875rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--teal); margin-bottom:14px; }
+.cov-h1 { font-size:2rem; font-weight:700; letter-spacing:-.03em; line-height:1.15; margin:0 0 12px; text-wrap:balance; }
+.cov-sub { font-size:1rem; color:var(--text-2); max-width:580px; margin-bottom:30px; line-height:1.6; }
+.cov-tags { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:40px; }
+.ctag { font-size:.75rem; font-weight:600; padding:4px 11px; border-radius:9999px; background:var(--teal-lt); color:var(--teal-dk); border:1px solid var(--border); }
+.doc-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(235px,1fr)); gap:14px; max-width:840px; }
+.doc-card {
+  background:var(--bg); border:1px solid var(--border); border-radius:8px;
+  padding:16px; border-top:3px solid; display:block;
+  color:inherit; text-decoration:none;
+  transition:box-shadow 140ms, transform 140ms;
+}
+.doc-card:hover { box-shadow:0 4px 14px rgba(0,0,0,.1); transform:translateY(-1px); text-decoration:none; }
+.dc-type { font-size:.6rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--text-3); margin-bottom:5px; }
+.dc-title { font-size:.9375rem; font-weight:700; line-height:1.3; margin-bottom:7px; }
+.dc-desc { font-size:.8125rem; color:var(--text-2); line-height:1.5; }
+
+/* ─── DOCUMENT SECTION ───────────────────────────────────────────────────── */
+section.doc-section {
+  padding:48px 60px;
+  border-bottom:1px solid var(--border);
+}
+section.doc-section:last-of-type { border-bottom:none; }
+.sec-badge {
+  display:inline-block; font-size:.6rem; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase;
+  border-radius:3px; padding:3px 8px; margin-bottom:10px;
+}
+.sec-title {
+  font-size:1.625rem; font-weight:700; letter-spacing:-.025em;
+  line-height:1.2; margin:0 0 7px; text-wrap:balance;
+}
+.sec-meta { font-size:.8rem; color:var(--text-3); margin-bottom:32px; display:flex; gap:18px; }
+
+/* ─── MARKDOWN CONTENT ───────────────────────────────────────────────────── */
+.md { max-width:760px; }
+.md h1 { font-size:1.375rem; font-weight:700; letter-spacing:-.02em; margin:36px 0 12px; text-wrap:balance; }
+.md h2 {
+  font-size:1.125rem; font-weight:700; letter-spacing:-.01em;
+  margin:32px 0 10px; padding-bottom:8px;
+  border-bottom:1px solid var(--border);
+  text-wrap:balance;
+}
+.md h3 { font-size:1rem; font-weight:700; margin:24px 0 8px; text-wrap:balance; }
+.md h4 {
+  font-size:.6875rem; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--text-2); margin:20px 0 6px;
+}
+.md p { margin:0 0 14px; }
+.md ul,.md ol { margin:0 0 14px; padding-left:22px; }
+.md li { margin-bottom:5px; }
+.md hr { border:none; border-top:1px solid var(--border); margin:28px 0; }
+.md blockquote {
+  border-left:3px solid var(--teal); padding:8px 16px;
+  background:var(--teal-sf); border-radius:0 6px 6px 0;
+  margin:16px 0; color:var(--text-2);
+}
+.md strong { font-weight:700; color:var(--text); }
+.md a { color:var(--teal); }
+
+/* Inline code */
+.ic {
+  font-family:var(--fm); font-size:.8em;
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:3px; padding:1px 5px; color:var(--teal-dk);
+}
+
+/* Code blocks */
+.cb { background:var(--code-bg); border-radius:8px; margin:16px 0; overflow:hidden; }
+.cb-lang {
+  font-family:var(--fm); font-size:.6rem; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase;
+  color:#5a7f9a; padding:8px 16px 3px;
+}
+.cb pre { margin:0; padding:10px 16px 16px; overflow-x:auto; }
+.cb code { font-family:var(--fm); font-size:.8rem; line-height:1.75; color:var(--code-text); white-space:pre; }
+.cb-diagram { background:var(--surface-2); border:1px solid var(--border); }
+.cb-diagram .cb-lang { color:var(--text-3); }
+.cb-diagram code { color:var(--text-2); }
+
+/* Tables */
+.tw { overflow-x:auto; margin:16px 0; border-radius:7px; border:1px solid var(--border); }
+.tw table { width:100%; border-collapse:collapse; font-size:.875rem; }
+.tw th {
+  background:var(--surface-2); font-size:.65rem; font-weight:700;
+  letter-spacing:.07em; text-transform:uppercase; color:var(--text-2);
+  padding:9px 14px; border-bottom:1px solid var(--border); white-space:nowrap;
+}
+.tw td { padding:9px 14px; border-bottom:1px solid var(--border); vertical-align:top; }
+.tw tr:last-child td { border-bottom:none; }
+.tw tbody tr:hover td { background:var(--bg); }
+
+/* ─── MOCKUP FRAMES ──────────────────────────────────────────────────────── */
+.mockup-wrap { margin:28px 0; }
+.mockup-label {
+  font-size:.7rem; font-weight:600; letter-spacing:.04em;
+  color:var(--text-3); margin-bottom:10px;
+  display:flex; align-items:center; gap:7px;
+}
+.mockup-chrome { border:1px solid var(--border); border-radius:10px; overflow:hidden; box-shadow:0 4px 18px rgba(0,0,0,.09); }
+.mockup-bar {
+  background:var(--surface-2); border-bottom:1px solid var(--border);
+  height:30px; display:flex; align-items:center; padding:0 12px; gap:5px;
+}
+.mockup-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.mockup-dot:nth-child(1) { background:#ef4444; }
+.mockup-dot:nth-child(2) { background:#f59e0b; }
+.mockup-dot:nth-child(3) { background:#22c55e; }
+.mockup-url {
+  flex:1; max-width:380px; margin:0 8px;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:4px; font-family:var(--fm); font-size:.65rem;
+  color:var(--text-3); padding:2px 8px; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap;
+}
+.mockup-frame { width:100%; height:530px; border:none; display:block; background:#f0f5f9; }
+
+/* ─── PRINT ──────────────────────────────────────────────────────────────── */
+@media print {
+  #sidebar { display:none; }
+  #app { grid-template-columns:1fr; }
+  section.doc-section { padding:32px 0; }
+  .mockup-frame { height:360px; }
+  .doc-card:hover { box-shadow:none; transform:none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ═══ SIDEBAR ══════════════════════════════════════════════════════════ -->
+<aside id="sidebar">
+  <div class="sb-top">
+    <div class="sb-mark"><span></span><span></span><span></span><span></span></div>
+    <div class="sb-heading">P2P Exchange Tester<br>Solution Design Reference</div>
+    <div class="sb-chips">
+      <span class="sb-chip sb-chip-ok">All Final</span>
+      <span class="sb-chip sb-chip-dt">July 2026</span>
+    </div>
+  </div>
+  <nav id="nav" aria-label="Document sections">
+    <a href="#cover"        class="nav-lnk on"  data-s="cover"       ><span class="nav-n">—</span>Overview</a>
+    <a href="#research"     class="nav-lnk"     data-s="research"    ><span class="nav-n">01</span>Domain Research</a>
+    <a href="#prd"          class="nav-lnk"     data-s="prd"         ><span class="nav-n">02</span>Product Requirements</a>
+    <a href="#design"       class="nav-lnk"     data-s="design"      ><span class="nav-n">03</span>Visual Design</a>
+    <a href="#experience"   class="nav-lnk"     data-s="experience"  ><span class="nav-n">04</span>Experience Design</a>
+    <a href="#architecture" class="nav-lnk"     data-s="architecture"><span class="nav-n">05</span>Architecture</a>
+    <a href="#epics"        class="nav-lnk"     data-s="epics"       ><span class="nav-n">06</span>Epics &amp; Stories</a>
+  </nav>
+</aside>
+
+<!-- ═══ MAIN CONTENT ══════════════════════════════════════════════════════ -->
+<main id="content">
+
+<!-- COVER ────────────────────────────────────────────────────────────── -->
+<section id="cover">
+  <div class="cov-eye">Deloitte GPS · Healthcare IT</div>
+  <h1 class="cov-h1">P2P Exchange Tester<br>Solution Design Reference</h1>
+  <p class="cov-sub">A complete design and planning reference for the browser-based Payer-to-Payer FHIR exchange client — built to test and demonstrate CMS-0057-F compliance against real payer APIs.</p>
+  <div class="cov-tags">
+    <span class="ctag">CMS-0057-F</span>
+    <span class="ctag">Da Vinci PDex 2.1</span>
+    <span class="ctag">FHIR R4</span>
+    <span class="ctag">OAuth 2.0 Client Credentials</span>
+    <span class="ctag">Vanilla JS / GitHub Pages</span>
+    <span class="ctag">July 2026</span>
+  </div>
+  <div class="doc-grid">
+    <a href="#research" class="doc-card" style="border-top-color:var(--c-research)">
+      <div class="dc-type">Domain Research</div>
+      <div class="dc-title">CMS-0057-F FHIR Technical Research</div>
+      <div class="dc-desc">Regulatory landscape, Da Vinci PDex standards stack, ecosystem survey, and implementation best practices.</div>
+    </a>
+    <a href="#prd" class="doc-card" style="border-top-color:var(--c-prd)">
+      <div class="dc-type">Product Requirements</div>
+      <div class="dc-title">P2P Exchange Tester — PRD</div>
+      <div class="dc-desc">Vision, target user journeys, 24 functional requirements, non-goals, success metrics, and open questions.</div>
+    </a>
+    <a href="#design" class="doc-card" style="border-top-color:var(--c-design)">
+      <div class="dc-type">Visual Design</div>
+      <div class="dc-title">Visual Design Specification</div>
+      <div class="dc-desc">Complete design token system, component specs, and full-fidelity HTML screen mockups for all three app views.</div>
+    </a>
+    <a href="#experience" class="doc-card" style="border-top-color:var(--c-experience)">
+      <div class="dc-type">Experience Design</div>
+      <div class="dc-title">Experience &amp; Interaction Design</div>
+      <div class="dc-desc">IA, component behavior patterns, state tables, accessibility floor, and three annotated user journeys.</div>
+    </a>
+    <a href="#architecture" class="doc-card" style="border-top-color:var(--c-arch)">
+      <div class="dc-type">Technical Architecture</div>
+      <div class="dc-title">Architecture Spine</div>
+      <div class="dc-desc">14 architectural invariants, module dependency rules, canonical config data shape, and the 4-step exchange flow.</div>
+    </a>
+    <a href="#epics" class="doc-card" style="border-top-color:var(--c-epics)">
+      <div class="dc-type">Epics &amp; Stories</div>
+      <div class="dc-title">Epic &amp; Story Breakdown</div>
+      <div class="dc-desc">4 epics covering all 24 FRs, decomposed into 15 user stories with full acceptance criteria.</div>
+    </a>
+  </div>
+</section>
+
+<!-- DOMAIN RESEARCH ─────────────────────────────────────────────────── -->
+<section id="research" class="doc-section">
+  <span class="sec-badge" style="background:rgba(124,110,247,.12);color:var(--c-research)">Domain Research</span>
+  <h1 class="sec-title">CMS-0057-F FHIR Technical Research</h1>
+  <div class="sec-meta"><span>2026-07-28</span><span>Final</span><span>Verified against CMS, HL7, and vendor sources</span></div>
+  <div id="research-body" class="md"></div>
+</section>
+
+<!-- PRD ─────────────────────────────────────────────────────────────── -->
+<section id="prd" class="doc-section">
+  <span class="sec-badge" style="background:rgba(224,150,38,.12);color:var(--c-prd)">Product Requirements</span>
+  <h1 class="sec-title">P2P Exchange Tester — PRD</h1>
+  <div class="sec-meta"><span>2026-07-29</span><span>Final</span></div>
+  <div id="prd-body" class="md"></div>
+</section>
+
+<!-- VISUAL DESIGN ───────────────────────────────────────────────────── -->
+<section id="design" class="doc-section">
+  <span class="sec-badge" style="background:rgba(212,89,154,.12);color:var(--c-design)">Visual Design</span>
+  <h1 class="sec-title">Visual Design Specification</h1>
+  <div class="sec-meta"><span>2026-07-29</span><span>Final</span></div>
+  <div id="design-body" class="md"></div>
+
+  <h2 style="font-size:1.125rem;font-weight:700;margin:36px 0 20px;padding-bottom:8px;border-bottom:1px solid var(--border)">Screen Mockups</h2>
+
+  <div class="mockup-wrap">
+    <div class="mockup-label">Previous Payers — payer card (compact + expanded), roster tab, active nav state</div>
+    <div class="mockup-chrome">
+      <div class="mockup-bar">
+        <div class="mockup-dot"></div><div class="mockup-dot"></div><div class="mockup-dot"></div>
+        <div class="mockup-url">russellott.github.io/fhirapps/PayerToPayerClient/app.html</div>
+      </div>
+      <iframe id="mockup-payers" class="mockup-frame" title="Previous Payers screen mockup" sandbox="allow-same-origin"></iframe>
+    </div>
+  </div>
+
+  <div class="mockup-wrap">
+    <div class="mockup-label">Exchange — step tracker in progress (Token ✓ · Member Match running · Scoped Token + Data Retrieval pending), debug strip</div>
+    <div class="mockup-chrome">
+      <div class="mockup-bar">
+        <div class="mockup-dot"></div><div class="mockup-dot"></div><div class="mockup-dot"></div>
+        <div class="mockup-url">russellott.github.io/fhirapps/PayerToPayerClient/app.html</div>
+      </div>
+      <iframe id="mockup-exchange" class="mockup-frame" title="Exchange screen mockup" sandbox="allow-same-origin"></iframe>
+    </div>
+  </div>
+
+  <div class="mockup-wrap">
+    <div class="mockup-label">Results — stat card row, ExplanationOfBenefit tab active, JSON viewer with live FHIR resource</div>
+    <div class="mockup-chrome">
+      <div class="mockup-bar">
+        <div class="mockup-dot"></div><div class="mockup-dot"></div><div class="mockup-dot"></div>
+        <div class="mockup-url">russellott.github.io/fhirapps/PayerToPayerClient/app.html</div>
+      </div>
+      <iframe id="mockup-results" class="mockup-frame" title="Results screen mockup" sandbox="allow-same-origin"></iframe>
+    </div>
+  </div>
+</section>
+
+<!-- EXPERIENCE DESIGN ───────────────────────────────────────────────── -->
+<section id="experience" class="doc-section">
+  <span class="sec-badge" style="background:rgba(23,179,179,.12);color:var(--c-experience)">Experience Design</span>
+  <h1 class="sec-title">Experience &amp; Interaction Design</h1>
+  <div class="sec-meta"><span>2026-07-29</span><span>Final</span></div>
+  <div id="experience-body" class="md"></div>
+</section>
+
+<!-- ARCHITECTURE ────────────────────────────────────────────────────── -->
+<section id="architecture" class="doc-section">
+  <span class="sec-badge" style="background:rgba(59,142,212,.12);color:var(--c-arch)">Technical Architecture</span>
+  <h1 class="sec-title">Architecture Spine</h1>
+  <div class="sec-meta"><span>2026-07-29</span><span>Final</span></div>
+  <div id="architecture-body" class="md"></div>
+</section>
+
+<!-- EPICS & STORIES ─────────────────────────────────────────────────── -->
+<section id="epics" class="doc-section">
+  <span class="sec-badge" style="background:rgba(44,184,112,.12);color:var(--c-epics)">Epics &amp; Stories</span>
+  <h1 class="sec-title">Epic &amp; Story Breakdown</h1>
+  <div class="sec-meta"><span>2026-07-29</span><span>Final</span></div>
+  <div id="epics-body" class="md"></div>
+</section>
+
+</main>
+</div>
+
+<!-- ═══ CONTENT STORAGE (not executed as JS) ══════════════════════════════ -->
+<script type="text/plain" id="md-research"># Research Report: Payer-to-Payer Data Exchange — CMS-0057-F FHIR Technical Requirements
+
+**Date:** 2026-07-28
+**Author:** Rott
+**Research Type:** Domain
+
+---
+
+## Executive Summary
+
+The CMS Interoperability and Prior Authorization Final Rule (CMS-0057-F), published February 8, 2024, mandates that Medicare Advantage organizations, Medicaid/CHIP managed care plans, and QHP issuers deploy four production FHIR R4 APIs by **January 1, 2027**. The Payer-to-Payer (P2P) API is the most technically complex of the four: it requires one health plan to authenticate to another, identify a specific member via demographic matching, obtain member consent, and retrieve up to five years of claims and clinical history in FHIR format.
+
+The technical foundation is the **Da Vinci PDex Implementation Guide** (v2.1.0 published; v2.2.0 in CI build as of June 2026), built on FHIR R4 (4.0.1), Da Vinci HRex (`$member-match`), and the FHIR Bulk Data Access IG STU2. The exchange operates in two modes: **single-member** (individual plan transition) and **bulk** (population-level). Both modes use OAuth 2.0 client credentials for machine-to-machine auth — no patient-facing browser redirect. The single-member flow is the right starting point for a client implementation: `$member-match` → member-scoped token → individual FHIR resource queries.
+
+For the PayerToPayerClient app, the existing project architecture (vanilla JS, `config.js` FHIR_SERVERS pattern, client credentials OAuth, CORS proxy) is well-suited to this specification. The primary implementation challenges are: handling the two-token exchange pattern (system-scoped then member-scoped), building robust async polling for bulk operations, managing consent failure responses gracefully, and planning for JWT-based SMART Backend Services auth as the path to production payer interoperability beyond connectathon environments.
+
+**Key Findings:**
+- P2P API deadline is January 1, 2027; industry implementation is actively underway with most large payers 12-18 months from zero to compliance
+- Two exchange modes: single-member (`$member-match` → scoped token → queries) and bulk (`$bulk-member-match` → `$davinci-data-export` → NDJSON)
+- Auth is OAuth 2.0 client credentials (no EHR launch); JWT SMART Backend Services is the production path
+- Member consent is opt-in, carried in the `$member-match` request, and validated server-side on every call
+- ONC Inferno PDex Test Kit provides a client-facing conformance suite against a reference server — the right validation tool
+- No universal payer endpoint directory exists; per-server `config.js` configuration is correct
+
+**Strategic Recommendations:**
+1. Implement single-member exchange first (MVP): `$member-match` → scoped token → individual resource queries
+2. Use ONC Inferno PDex Test Kit for conformance validation before testing against real payers
+3. Design `tokenAuthMethod` to be configurable — `client_secret_post`/`basic` now, JWT later
+4. Handle 422 `$member-match` failures as expected business outcomes, not errors
+5. Plan bulk exchange as phase 2; browser limits on large NDJSON payloads are a known constraint
+
+---
+
+## Industry Analysis: CMS-0057-F Regulatory & Standards Landscape
+
+### Regulatory Overview and Compliance Timeline
+
+CMS-0057-F (the Interoperability and Prior Authorization Final Rule) was published in the Federal Register on February 8, 2024. It mandates four FHIR APIs across Medicare Advantage organizations, state Medicaid/CHIP FFS programs, Medicaid managed care plans, CHIP managed care entities, and QHP issuers on Federally Facilitated Exchanges.
+
+_Compliance dates:_
+- **January 1, 2026** — operational changes (documentation, member notification, prior authorization timelines)
+- **January 1, 2027** — all four FHIR APIs must be in production: Patient Access, Provider Access, Payer-to-Payer, and Prior Authorization
+- State Medicaid/CHIP FFS programs may request a one-time one-year extension on the Payer-to-Payer API
+
+_Enforcement:_ Medicare Advantage plans evaluated via annual survey instruments; QHP issuers evaluated through annual QHP certification. No separate CMS enforcement agency — compliance is administered through each program's existing authority.
+
+---
+
+### Required Data for Payer-to-Payer Exchange
+
+Per the rule, the Payer-to-Payer API must make available:
+
+- **Claims and encounter data** — excluding provider remittances and enrollee cost-sharing
+- **All USCDI data classes and elements** — as adopted by ONC
+- **Prior authorization data** — excluding authorizations for drugs
+- **Lookback period:** 5 years of data must be exchanged
+
+---
+
+### FHIR Standards Stack
+
+The Payer-to-Payer API is built on a specific stack of overlapping IGs:
+
+| Standard | Version | Role |
+|---|---|---|
+| FHIR | R4 (4.0.1) | Base protocol |
+| US Core | 3.1.1 (required) + 6.1.0 (HTI-1) | Clinical resource profiles (USCDI) |
+| Da Vinci PDex | 2.1.0 (published) / 2.2.0 (CI build, Jun 2026) | P2P exchange operations and profiles |
+| Da Vinci HRex | current | Defines `$member-match` operation and consent |
+| Da Vinci ATR | current | Group/attribution management |
+| FHIR Bulk Data Access IG | STU2 (2.0.0) | Async NDJSON bulk exchange pattern |
+
+_PDex v2.2.0 adds support for US Core 6.1.0 and 7.0.0 to satisfy the ONC HTI-1 rule (effective January 1, 2026)._
+
+---
+
+### Market Dynamics: Two Exchange Modes
+
+CMS-0057-F specifies two operational modes for Payer-to-Payer exchange:
+
+**Single Member Exchange** — triggered when an individual member switches plans. The new payer pulls the member's history from the prior payer on behalf of that specific member.
+
+**Bulk Exchange** — triggered when a payer needs to exchange data for a population of members simultaneously (e.g., large employer group transitions, annual open enrollment).
+
+Both modes share the same underlying FHIR/OAuth foundation but differ in the operations invoked and the async pattern used.
+
+---
+
+## Ecosystem Landscape: Servers, Vendors, and Testing Platforms
+
+### Key FHIR Server Vendors Implementing P2P
+
+| Vendor | Platform | Notes |
+|---|---|---|
+| **Firely** | Firely Server | Explicit CMS-0057-F compliance product; supports PDex, SMART App Launch 2.0, bulk data |
+| **Microsoft** | Azure Health Data Services (AHDS) | Managed FHIR R4 service; AWS HealthLake also supports `$davinci-data-export` |
+| **InterSystems** | HealthShare / IRIS for Health | Documented CMS-0057 PDex member-match implementation; frequently deployed at large payers |
+| **Health Samurai** | Aidbox / PayerBox | Purpose-built PDex support including `$davinci-data-export` |
+| **AWS** | HealthLake | Supports `$davinci-data-export` operation natively |
+
+---
+
+### Testing & Conformance Infrastructure
+
+**ONC Inferno / Da Vinci PDex Test Kit**
+- Validates PDex v2.0.0 conformance; includes both server and **client** suites
+- Client suite: Inferno acts as an old-payer server; the client under test makes requests simulating a new-payer pull
+- Most authoritative conformance test for CMS-0057-F P2P compliance
+
+**FHIR Foundry Reference Implementation**
+- Hosts the official PDex reference server; selectable as a preset in Inferno test kit
+- Useful for initial client development before testing against real payer servers
+
+**Da Vinci Connectathons (HL7)**
+- Annual virtual events where payer/vendor implementations are tested against each other
+- April 2025 event validated bulk P2P exchange patterns
+
+---
+
+### Known Auth Server Patterns in the Ecosystem
+
+From the project's existing config (Keycloak deployments at `auth.platform.uat.mt.healthinteractive.net` and `deloitte.connectathons.com`) and broader ecosystem research:
+
+- **Keycloak** — most common open-source auth server at connectathons and UAT environments; typically uses `client_secret_post` or `client_secret_basic`
+- **Purpose-built SMART auth servers** (e.g., Firely Auth, Okta with SMART layer) — may require JWT client authentication (RS256) rather than client secret
+- **Token endpoint discovery** — some servers support `/.well-known/smart-configuration` or `/.well-known/openid-configuration`
+
+---
+
+## Technical Requirements: FHIR Operation Flows
+
+### Auth: OAuth 2.0 Client Credentials
+
+P2P exchange uses **system-to-system (machine-to-machine) auth only** — no user browser redirect.
+
+**Token acquisition:**
+```
+POST [tokenUrl]
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials
+&client_id=[clientId]
+&client_secret=[clientSecret]          ← client_secret_post
+&scope=system/*.rs                     ← SMART system-level scopes
+```
+_(Or `Authorization: Basic base64(clientId:clientSecret)` header for `client_secret_basic`)_
+
+**After member match**, a second token request is issued scoped to the specific matched member:
+```
+POST [tokenUrl]
+grant_type=client_credentials
+&client_id=[clientId]
+&patient=[matched-patient-fhir-id]   ← member-scoped
+&scope=patient/*.rs
+```
+
+---
+
+### Single Member Exchange — HTTP Flow
+
+**Step 1 — Obtain system-level access token** (client credentials, above)
+
+**Step 2 — POST `$member-match`**
+```
+POST [fhirBase]/Patient/$member-match
+Authorization: Bearer [system-token]
+Content-Type: application/fhir+json
+
+{
+  "resourceType": "Parameters",
+  "parameter": [
+    { "name": "MemberPatient", "resource": { /* Patient — member demographics */ } },
+    { "name": "CoverageToMatch", "resource": { /* Coverage — member's old plan */ } },
+    { "name": "CoverageToLink", "resource": { /* Coverage — member's new plan */ } },
+    { "name": "Consent", "resource": { /* PDex Consent — opt-in scope: "everything" */ } }
+  ]
+}
+```
+
+**Success response (HTTP 200):**
+```json
+{
+  "resourceType": "Parameters",
+  "parameter": [
+    { "name": "MemberIdentifier", "valueIdentifier": { "value": "[member-business-id]" } },
+    { "name": "MemberId", "valueReference": { "reference": "Patient/[fhir-id]" } }
+  ]
+}
+```
+**No match / consent denied:** HTTP 422 Unprocessable Entity with OperationOutcome.
+
+**Step 3 — Obtain member-scoped access token**
+
+**Step 4 — Retrieve member data** using scoped token:
+- Option A: Individual resource queries — `GET [fhirBase]/ExplanationOfBenefit?patient=[id]`, etc.
+- Option B: `GET [fhirBase]/Patient/[id]/$everything-pdex` — returns all resources in a Bundle
+
+---
+
+### Bulk Member Exchange — HTTP Flow
+
+**Step 1 — Obtain system-level access token**
+
+**Step 2 — POST `$bulk-member-match` (async)**
+```
+POST [fhirBase]/Group/$bulk-member-match
+Authorization: Bearer [system-token]
+Content-Type: application/fhir+json
+Prefer: respond-async
+```
+**Response:** `HTTP 202 Accepted` + `Content-Location: [status-url]`
+
+**Step 3 — Poll status endpoint** until complete; returns Group resource with matched/non-matched/consent-constrained members.
+
+**Step 4 — POST `$davinci-data-export` on the matched Group (async)**
+
+**Step 5 — Poll export status, then download NDJSON** — each line is a complete, self-contained FHIR R4 resource.
+
+---
+
+### Required Server Operations (PDex Payer-Access CapabilityStatement)
+
+| Operation | Endpoint | Exchange Mode |
+|---|---|---|
+| `$member-match` (HRex) | `POST [base]/Patient/$member-match` | Single member |
+| `$bulk-member-match` | `POST [base]/Group/$bulk-member-match` | Bulk |
+| `$davinci-data-export` | `POST [base]/Group/[id]/$davinci-data-export` | Bulk |
+| `$everything-pdex` | `GET [base]/Patient/[id]/$everything-pdex` | Single member (optional) |
+
+---
+
+### Required Resource Types and FHIR Profiles
+
+**Claims / Financial:**
+- `ExplanationOfBenefit` — PDex profile (claims + encounters)
+- `Coverage` — US Core
+
+**Clinical (USCDI v1, US Core 3.1.1 minimum):**
+- `Patient`, `Condition`, `Observation`, `MedicationRequest`, `MedicationDispense`
+- `AllergyIntolerance`, `Immunization`, `DiagnosticReport`, `Procedure`, `DocumentReference`
+- `Provenance` — required to preserve clinical context across payer-to-payer transfers
+
+**Prior Authorization:**
+- `Claim` (response) or proprietary PA extension on ExplanationOfBenefit (drugs excluded)
+
+---
+
+### Consent Model
+
+- P2P exchange is **member opt-in** — member must actively consent before data is exchanged
+- Consent is carried as a FHIR `Consent` resource in the `$member-match` Parameters bundle
+- Two consent policy scopes: **"everything"** (all data) or **"non-sensitive only"** (excludes behavioral health, substance abuse, etc.)
+- If consent is denied or expired, server returns a 422 OperationOutcome — client must handle gracefully
+
+---
+
+## Implementation Best Practices
+
+### Auth Evolution: Client Secret → JWT
+
+**Current state (connectathons/UAT):** `client_secret_post` and `client_secret_basic` are widely used.
+
+**Production trajectory (2027 deadline):** SMART Backend Services v2.2.0 mandates asymmetric JWT client authentication — the client generates a one-time JWT, signs it with a private key (RS384 or ES384), and presents it to the token endpoint:
+
+```
+POST [tokenUrl]
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials
+&client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+&client_assertion=[signed-JWT]
+&scope=system/*.rs
+```
+
+**Implication:** Design the token request layer to be swappable — `client_secret_post`/`basic` now, JWT later.
+
+---
+
+### Known Gotchas and Common Mistakes
+
+**Resource type gotchas:**
+- Use `MedicationDispense` (not `MedicationRequest`) for pharmacy-claims-derived medication data
+- `Provenance` resources are required to preserve clinical context — do not filter them out
+- `ExplanationOfBenefit` excludes provider remittances and enrollee cost-sharing
+
+**Member match failure handling:**
+- A 422 OperationOutcome from `$member-match` is a business outcome, not a server error
+- Always use the Patient FHIR ID returned from `$member-match`, not from the Coverage or demographics
+
+**Token scoping:**
+- The member-scoped token is scoped to `Patient/[id]` — using it to access a different patient's resources will return 403, not 404
+- System-level tokens should NOT be reused for member-scoped data access after match
+
+**CORS:** Payer FHIR servers are not browser-accessible directly — they require the Cloudflare Worker proxy.
+
+---
+
+## Recommendations for PayerToPayerClient Implementation
+
+### Immediate (MVP for connectathon/UAT)
+
+1. **Start with single-member exchange** — implement the `$member-match` → scoped token → individual resource queries flow first
+2. **Support `client_secret_post` and `client_secret_basic`** — covers all known Keycloak environments
+3. **Handle `$member-match` failure gracefully** — show a clear "member not found" or "consent denied" message
+4. **Test against ONC Inferno PDex Test Kit** — use the client suite with the FHIR Foundry reference server preset
+
+### Near-term (full compliance path)
+
+5. **Add bulk exchange** — implement `$bulk-member-match` + `$davinci-data-export` with async polling and NDJSON parsing
+6. **Plan for JWT client auth** — design the token layer with a `tokenAuthMethod: "jwt_private_key"` path even if not implemented yet
+7. **Handle both US Core 3.1.1 and 6.1.0** — don't assume profile URLs in resource `meta.profile`
+
+---
+
+## Research Conclusion
+
+The technical path for a CMS-0057-F compliant Payer-to-Payer FHIR client is well-defined. The single-member `$member-match` flow is the right MVP scope: straightforward HTTP operations, well-tested at connectathons, and directly applicable to the project's known Keycloak auth environments.
+
+The two non-obvious implementation requirements are: (1) the **two-token exchange pattern** — a system-level token to call `$member-match`, then a separate member-scoped token to retrieve data — and (2) the **consent model** — the Consent resource must be built and included in every `$member-match` request, and 422 responses are expected business outcomes.
+
+**Research Completion Date:** 2026-07-29
+**Confidence Level:** High — based on multiple authoritative sources including CMS, HL7, and vendor documentation</script>
+<script type="text/plain" id="md-prd"># PRD: P2P Exchange Tester
+
+## 0. Document Purpose
+
+Requirements for the P2P Exchange Tester. Audience: Deloitte GPS healthcare IT staff, architecture, and epics/stories owners. Features are in §4 (globally-numbered FRs); assumptions are indexed in §8.
+
+---
+
+## 1. Vision
+
+The P2P Exchange Tester is a static, browser-based application that enables Deloitte staff to interactively exercise Payer-to-Payer FHIR APIs. It implements the New Payer role in the CMS-0057-F data exchange flow: authenticating to an Previous Payer's FHIR server using client credentials, identifying a member via demographic matching, and retrieving that member's health history as FHIR resources.
+
+Unlike a production P2P client — which would automate exchanges invisibly — this tool is designed for testing and demonstration. Every step of the exchange flow is visible, configurable, and inspectable. Testers can manage a library of Previous Payer connections and member rosters through the UI, trigger exchanges on demand, and inspect both the structured results and the raw FHIR payloads returned.
+
+The tool lives in the `fhirapps` monorepo alongside PatientAccess and ProviderDirectory, deployed to GitHub Pages with no build step and no backend. It is the authoritative test client for evaluating Previous Payer FHIR P2P API implementations as payers build toward the January 1, 2027 CMS compliance deadline.
+
+## Why Now
+
+CMS-0057-F requires all impacted payers to have production-ready Payer-to-Payer FHIR APIs by **January 1, 2027**. Payers are actively building these APIs now, creating immediate demand for a test client that can validate their implementations end-to-end. A reusable, configurable test client built now enables Deloitte to support multiple payer engagements across this compliance window.
+
+---
+
+## 2. Target User
+
+### 2.1 Jobs To Be Done
+
+- Validate that an Previous Payer's FHIR P2P API is correctly implementing the CMS-0057-F exchange flow without writing code or using Postman
+- Set up and manage test scenarios (payer connections, member rosters) and share them with teammates
+- Demonstrate a working end-to-end P2P exchange to payer clients or at HL7 connectathons
+- Inspect raw FHIR payloads returned by Previous Payers to diagnose conformance issues
+- Quickly switch between different Previous Payer testing environments by importing a config file
+
+### 2.2 Key User Journeys
+
+- **UJ-1. Alex configures a new Previous Payer connection before a connectathon.**
+  - **Path:** Opens the Previous Payer config panel → adds a new Previous Payer with name, FHIR base URL, token URL, client ID, client secret, and auth method → adds three test members to the payer's Roster → exports the full config as a JSON file and shares it with a colleague.
+  - **Climax:** The config exports successfully and the colleague imports it in their own browser session, seeing the same Previous Payer and roster — ready to test without re-entry.
+
+- **UJ-2. Alex runs a P2P exchange for a specific member.**
+  - **Path:** Selects Previous Payer → selects one member from the roster → triggers exchange → watches step-by-step progress (token acquired → member matched → data retrieved) → views the results summary showing resource counts by type.
+  - **Climax:** Results show "ExplanationOfBenefit: 12, Condition: 4, MedicationRequest: 3" — the payer's API is returning clinical data correctly.
+  - **Edge case:** Member match returns 422 (member not found); app displays "Member not found at Previous Payer — check demographics or member ID" with the exact fields submitted.
+
+- **UJ-3. Alex demonstrates the exchange flow to a client.**
+  - **Path:** Opens the app → imports the demo config → selects the Previous Payer → selects a test member → triggers exchange → walks the client through each visible step → shows the results summary and drills into one raw ExplanationOfBenefit resource.
+  - **Climax:** The client sees a live end-to-end exchange completing in their own UAT environment within the demo.
+
+---
+
+## 3. Glossary
+
+| Term | Definition |
+|---|---|
+| **New Payer** | The health plan acting as the requesting party. The P2P Exchange Tester always acts as the New Payer. |
+| **Previous Payer** | A health plan that previously covered a Member; the FHIR API server under test. |
+| **Member** | An individual identified by demographics and a Member ID at the Previous Payer. |
+| **Roster** | The set of Members associated with a specific Previous Payer in the app. |
+| **Config File** | A JSON file containing the New Payer identity, all Previous Payer configurations, and all Rosters. |
+| **Exchange** | A single end-to-end P2P data retrieval: token acquisition → Member Match → member-scoped token → resource retrieval. |
+| **Member Match** | The `$member-match` FHIR operation (Da Vinci HRex) that identifies the Member at the Previous Payer. |
+| **Member-Scoped Token** | A narrower Access Token scoped to a specific Member's FHIR ID. Used to retrieve that Member's health data. |
+| **Token Auth Method** | `client_secret_post` (credentials in request body) or `client_secret_basic` (credentials in `Authorization` header). |
+
+---
+
+## 4. Features
+
+### 4.1 Configuration Management
+
+Users configure the app's test environment through a dedicated configuration view. Config is persisted in browser `localStorage` so it survives page refreshes, and can be overwritten by importing a Config File.
+
+#### FR-1: New Payer identity and global configuration
+The user can set and save the New Payer identity (name, client ID, client secret) and a global CORS Proxy URL.
+
+#### FR-2: Add Previous Payer
+The user can add a new Previous Payer: display name, FHIR Base URL, token URL, client ID, client secret, Token Auth Method, and CORS Proxy toggle.
+
+#### FR-3: Edit Previous Payer
+The user can edit any field of an existing Previous Payer configuration. Changes persist to `localStorage` on save. The Previous Payer's Roster is unaffected by config edits.
+
+#### FR-4: Delete Previous Payer
+The user can delete an Previous Payer configuration, with a confirmation prompt. Deletion removes the Previous Payer and its entire Roster.
+
+#### FR-5: Export Config File
+The user can export the full app configuration — New Payer identity, all Previous Payer configs, and all Rosters — as a single pretty-printed JSON file download.
+
+#### FR-6: Import Config File
+The user can import a Config File JSON, replacing the current configuration entirely. Import prompts for confirmation before overwriting existing config. Import fails with a specific error message if the file cannot be parsed.
+
+#### FR-7: Config persistence
+The app persists all configuration in browser `localStorage` and restores it on load without user action.
+
+---
+
+### 4.2 Member Roster Management
+
+Each Previous Payer has a Roster of Members used to drive `$member-match` requests.
+
+#### FR-8: Add Member to Roster
+Fields: first name, last name, date of birth, gender, and member ID at the Previous Payer. All five fields are required; save is blocked if any are empty.
+
+#### FR-9: Edit Member record
+The user can edit any field of an existing Member record.
+
+#### FR-10: Delete Member from Roster
+The user can delete a Member with a confirmation prompt.
+
+#### FR-11: Roster list view
+The Roster for each Previous Payer is displayed as a list showing member name and member ID. Empty Roster shows a placeholder prompting the user to add a Member.
+
+---
+
+### 4.3 P2P Exchange Execution
+
+The Exchange view is the core of the application. The app executes the CMS-0057-F single-member P2P flow: (1) obtain a system-level Access Token via client credentials, (2) POST `$member-match`, (3) obtain a Member-Scoped Token, (4) retrieve Member health data via individual FHIR resource queries.
+
+#### FR-12: Select Previous Payer for Exchange
+Previous Payer selector is populated with all configured Previous Payers. Selecting a Previous Payer loads its Roster into the Member selector.
+
+#### FR-13: Select Member for Exchange
+The user can select one Member from the selected Previous Payer's Roster. Exchange cannot be triggered without a Member selected.
+
+#### FR-14: Obtain Access Token
+The app POSTs to the Previous Payer's token URL using the New Payer's client credentials and the configured Token Auth Method to obtain a system-level Access Token.
+
+- Token step shows "In progress" then "Success" (with token type and expiry) or "Failed" (with HTTP status and error body)
+- Token request includes `scope=system/*.rs`
+- Requests route through the CORS Proxy if the Previous Payer's CORS Proxy toggle is enabled
+
+#### FR-15: Execute Member Match
+The app POSTs to `[FHIR Base URL]/Patient/$member-match` with a Parameters bundle containing: `MemberPatient`, `CoverageToMatch`, `CoverageToLink`, and `Consent` (scope "everything", 5-year lookback).
+
+- A 422 response is treated as a business outcome, not an error — displayed with the OperationOutcome issue text
+- Matched Member FHIR ID is retained for use in FR-16
+
+#### FR-16: Obtain Member-Scoped Token
+After a successful Member Match, the app requests a new Access Token scoped to the matched Member FHIR ID. Token request includes `scope=patient/*.rs`. If the scoped token request fails, the Exchange halts with a server-capability error message; no fallback to system token.
+
+#### FR-17: Retrieve Member health data
+**MVP resource type set:** ExplanationOfBenefit, Condition, MedicationRequest, MedicationDispense, Observation, AllergyIntolerance, Immunization, Provenance.
+
+- Each resource type query shows individual status (in progress / success / failed / 0 results)
+- A query returning 0 resources is treated as success (empty result), not an error
+
+#### FR-18: Exchange step progress display
+The Exchange view shows each step — Token, Member Match, Scoped Token, Resource Retrieval — with real-time status indicators. Failed steps show a human-readable error message and do not proceed to subsequent steps.
+
+#### FR-19: Member match failure handling
+When `$member-match` returns a 422, the app displays a clear message:
+- "Member not found" message names the demographics submitted (name, DOB, member ID)
+- "Consent denied" message is distinct from "member not found"
+
+---
+
+### 4.4 Results Viewer
+
+After an Exchange completes, the Results Viewer displays a summary of retrieved data and provides access to the raw FHIR payloads.
+
+#### FR-20: Resource count summary
+The Results Viewer displays a count of retrieved resources grouped by FHIR resource type, including zero counts.
+
+#### FR-21: Raw FHIR resource viewer
+The user can select any resource type and view the individual FHIR JSON resources returned for that type, as formatted (pretty-printed) JSON.
+
+#### FR-22: NDJSON Payload download
+The user can download the full Payload for the Exchange as a single NDJSON file. The filename includes Previous Payer name, Member name, and exchange date.
+
+#### FR-23: Session result retention
+Exchange results are retained in session state for the duration of the browser session. Results do not persist after page reload.
+
+---
+
+### 4.5 Debug Panel
+
+A collapsible debug panel displays HTTP request and response details for each Exchange step. Hidden by default; toggled via a visible button.
+
+#### FR-24: Debug panel toggle
+Logs the full HTTP request (URL, headers, body) and response (status, headers, body) for each Exchange step. Client secrets are redacted (first 4 chars visible, remainder as `****`).
+
+---
+
+## 5. Non-Goals (Explicit)
+
+- **No production use** — this is a demo/test tool; embedded client secrets are intentional
+- **No bulk exchange in MVP** — `$bulk-member-match` and `$davinci-data-export` are deferred to v2
+- **No per-member consent UI** — Consent is pre-constructed per exchange using assumed "everything" scope
+- **No scheduling or automation** — all exchanges are manually triggered
+- **No target FHIR server push** — retrieved data is displayed and downloadable, not loaded into a destination FHIR server
+- **No app-level authentication** — assumed to be used by authorized Deloitte staff
+- **No JWT/SMART Backend Services auth** — client_secret_post and client_secret_basic only in MVP
+
+---
+
+## 6. Success Metrics
+
+- **SM-1:** A Deloitte tester who has not used the app before can configure a new Previous Payer connection, add a member, and complete a successful Exchange without referring to documentation.
+- **SM-2:** A Config File exported from one tester's browser, when imported by a second tester, produces an identical Exchange result for the same member.
+- **SM-3:** Exchange step failures produce messages specific enough to identify the failing field or API call without opening the debug panel.
+- **SM-4:** Raw FHIR resources for any type are accessible within two interactions of the Exchange completing.
+- **SM-5:** The app loads and is usable in a fresh browser session (no prior `localStorage`) without errors.
+
+---
+
+## 7. Open Questions
+
+1. **Config import: replace vs. merge** — MVP replaces entirely. Should v2 support merging?
+2. **Coverage resource construction** — what fields beyond `memberIdAtOldPayer` are required by target servers?
+3. **Resource types to query** — should queried resource types be configurable per Previous Payer?
+4. **Exchange history persistence** — Session-only in MVP. When does cross-session persistence become load-bearing?
+5. **OAuth scope value variability** — `system/*.rs` is SMART v2 syntax; some servers may use different syntax.
+
+---
+
+## 8. Assumptions Index
+
+- **[CONFIRMED]** Consent pre-constructed with "everything" scope and 5-year lookback
+- **[ASSUMPTION]** `CoverageToMatch` minimally constructed from memberIdAtOldPayer + plan name; actual required fields may vary
+- **[CONFIRMED, extensible]** Fixed resource type set (including Provenance) confirmed for MVP; explicitly expected to expand
+- **[ASSUMPTION]** App accepts resources from both US Core 3.1.1 and 6.1.0 without profile-specific validation
+- **[ASSUMPTION]** SMART v2 scope syntax (`system/*.rs`, `patient/*.rs`) assumed sufficient
+- **[CONFIRMED with error handling]** Previous Payer auth server assumed to support patient-scoped client credentials; when not supported, Exchange halts with a server-capability error message
+- **[ASSUMPTION]** Client secrets included in Config File export; matches existing project security posture (demo credentials only)
+
+---
+
+## 9. Technical Constraints
+
+- **CORS:** All FHIR and token endpoint requests must route through the Cloudflare Worker CORS proxy for servers that don't return `Access-Control-Allow-Origin`.
+- **No backend:** All state lives in browser `localStorage`; all API calls are browser-originated fetch requests.
+- **No build step:** Vanilla HTML/CSS/JavaScript per monorepo conventions; no npm, no transpilation.
+- **referrerPolicy:** All fetch calls to FHIR and token endpoints must set `referrerPolicy: 'no-referrer'` to prevent Keycloak from rejecting requests.
+
+**Dependencies:**
+- Previous Payer FHIR servers — variable; configured per Previous Payer. Known initial targets: Keycloak at `auth.platform.uat.mt.healthinteractive.net` and `deloitte.connectathons.com`.
+- Cloudflare Worker CORS proxy — existing deployment; same proxy used by PatientAccess sibling app.
+- OAuth 2.0 token endpoints — Keycloak-compatible; `client_secret_post` and `client_secret_basic` auth methods supported.
+- Da Vinci PDex v2.1.0 / HRex — defines `$member-match` operation shape and Consent profile.</script>
+<script type="text/plain" id="md-design">## Brand & Style
+
+The P2P Exchange Tester inherits the HealthInteractive portal aesthetic: clean, clinical, and data-forward. The visual language prioritizes **information density** and **status clarity** over decoration. Every visual element serves the tester's need to read state at a glance — what is happening, whether it succeeded, and where the problem is if it didn't.
+
+**Tone:** professional enterprise tool, not a consumer app. Minimal whitespace in data-dense areas. Generous whitespace in setup and configuration areas. No playfulness.
+
+**Alignment:** HealthInteractive's teal is the single brand accent. It signals interactivity and success. All other accent uses are semantic (error red, warning amber, in-progress blue).
+
+---
+
+## Colors
+
+### Brand
+
+| Token | Hex | Usage |
+|---|---|---|
+| `primary` | `#17b3b3` | Interactive elements, active states, links, primary buttons, success step icons |
+| `primary-dark` | `#0f8a8a` | Button hover, active press state |
+| `primary-light` | `#e8f7f7` | Active nav item background, selected card highlight |
+| `primary-surface` | `#f0fbfb` | Hover backgrounds on interactive rows |
+
+### Neutrals
+
+| Token | Hex | Usage |
+|---|---|---|
+| `page-bg` | `#f0f5f9` | App page background |
+| `surface` | `#ffffff` | Cards, sidebar, header, panels |
+| `border` | `#dde5ec` | Card borders, dividers, input borders |
+| `border-strong` | `#b8ccd8` | Focused or emphasized dividers |
+| `text-primary` | `#1a2e3b` | Body text, headings |
+| `text-secondary` | `#6b7d8d` | Labels, metadata, helper text |
+| `text-disabled` | `#a0b4c0` | Disabled inputs and labels |
+| `text-link` | `#17b3b3` | Inline links |
+
+### Semantic Status (5 states)
+
+Each status has three tokens: foreground, background, and text (for badges and inline messages).
+
+| State | Foreground | Background | Text |
+|---|---|---|---|
+| Success | `#22c55e` | `#f0fdf4` | `#15803d` |
+| Warning | `#f59e0b` | `#fffbeb` | `#92400e` |
+| Error | `#ef4444` | `#fef2f2` | `#991b1b` |
+| Pending | `#94a3b8` | `#f8fafc` | `#475569` |
+| In Progress | `#3b82f6` | `#eff6ff` | `#1d4ed8` |
+
+### Debug Panel
+
+| Token | Hex |
+|---|---|
+| `debug-bg` | `#1e272e` |
+| `debug-bg-alt` | `#263238` |
+| `debug-text` | `#aed581` |
+
+---
+
+## Typography
+
+Primary: `'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif`
+
+Monospace: `'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', 'Courier New', monospace`
+
+### Scale
+
+| Token / Weight | Size | Usage |
+|---|---|---|
+| `3xl` / bold | 1.75rem / 700 | Page headings ("Previous Payers", "Exchange") |
+| `2xl` / semibold | 1.5rem / 600 | Section headings, drawer titles |
+| `xl` / semibold | 1.25rem / 600 | Card titles, stat card numbers |
+| `lg` / medium | 1.125rem / 500 | Sub-section headings, step labels |
+| `base` / regular | 1rem / 400 | Body text, form labels |
+| `sm` / regular | 0.875rem / 400 | Input text, table content, secondary body |
+| `xs` / regular | 0.75rem / 400 | Badges, metadata, debug panel |
+
+Monospace is used in: JSON viewer, debug panel, FHIR URL fields, token values, FHIR IDs.
+
+---
+
+## Layout & Spacing
+
+### Shell
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Header (56px, full width)                            │
+├─────────────┬────────────────────────────────────────┤
+│  Sidebar    │  Main content (scrollable)              │
+│  220px      │  padding: 24px                          │
+│  (collapses │                                         │
+│  to 56px)   │                                         │
+└─────────────┴────────────────────────────────────────┘
+```
+
+- Base unit: 4px
+- Component spacing: multiples of 8px (8, 16, 24, 32, 48)
+- Card gap: 16px | Section gap: 24px | Form field gap: 16px
+- Desktop-only for MVP. Minimum tested width: 1024px.
+
+---
+
+## Elevation & Depth
+
+| Level | Shadow | Usage |
+|---|---|---|
+| 0 | none | Page background, sidebar |
+| 1 | `0 1px 3px rgba(0,0,0,0.08)` | Cards, stat cards, input fields at rest |
+| 2 | `0 4px 12px rgba(0,0,0,0.12)` | Dropdowns, expanded detail panels |
+| 3 | `0 8px 24px rgba(0,0,0,0.16)` | Settings drawer, modal overlays |
+
+---
+
+## Shapes
+
+| Token | Value | Usage |
+|---|---|---|
+| `xs` | 2px | Small internal corners |
+| `sm` | 4px | Inputs, buttons, status badges |
+| `md` | 8px | Cards, payer cards, stat cards, dropdowns |
+| `lg` | 12px | Expanded panels, JSON viewer container |
+| `xl` | 16px | Step tracker icon circles background |
+| `full` | 9999px | Status badge pills, avatar/icon circles |
+
+---
+
+## Components
+
+### Sidebar Nav
+
+- Background: `surface` (white). Right border: `1px solid border`.
+- Nav item (expanded): 40px height, 16px horizontal padding, icon (20px) + label (`sm/medium`).
+- **Active state:** background `primary-light`, icon and label color `primary`, left border `3px solid primary`.
+- Collapsed: 56px wide, icons centered, no label. Tooltip on hover shows label.
+
+### Header
+
+- White background, bottom border `1px solid border`.
+- Left: "P2P Exchange Tester" in `xl/semibold`. Environment badge (pill "DEV" / "UAT").
+- Right: New Payer identity chip (name in `sm/medium`, `primary-light` bg, `primary` text, `full` radius) + gear icon button.
+
+### Stat Cards
+
+- White card, `md` radius, level-1 shadow. Padding: 16px 20px.
+- Layout: colored icon circle (32px) + label (`xs/medium`) stacked above number (`xl/bold`).
+- Zero-count variant: number in `text-secondary` (de-emphasized but still shown — per FR-20).
+- Arrange in a horizontal scroll row; no wrapping.
+
+### Payer Card
+
+- White card, `md` radius, level-1 shadow. Hover: level-2 shadow.
+- **Compact header row** (44px min-height): payer name (`base/semibold`) + method badge + CORS badge (if enabled) + member count chip + Edit / Delete icon buttons.
+- **Expanded body:** tabbed panel — **Config** (edit form) | **Roster** (member table). Active tab has `primary` underline.
+- Only one card expanded at a time — expanding a second collapses the first.
+
+### Step Tracker
+
+- Vertical list of 4 items. Items separated by a 2px vertical connector line.
+- Step item: icon circle (28px) + step name (`base/semibold`) + status text. Right side: elapsed time.
+- **Icon states:**
+  - **Pending:** hollow circle, `border` stroke, gray dash inside
+  - **In Progress:** teal circle, white spinner, CSS `@keyframes spin`
+  - **Success:** filled `primary` circle, white checkmark
+  - **Failed:** filled `error` circle, white × mark
+- Clicking a completed/failed step row reveals a detail sub-panel.
+
+### Status Badge
+
+Pill-shaped inline label. Padding: 2px 10px. Radius: `full`. Font: `xs/semibold`. Always includes a colored circle dot (6px) — never color-only.
+
+### Settings Drawer
+
+- Slides in from the right (200ms ease-out). Width: 360px. Full-height. Level-3 shadow.
+- Semi-transparent backdrop behind drawer; click backdrop to close.
+- Sections: **New Payer Identity** | divider | **CORS Proxy** | divider | **Config File** (Export + Import).
+- Save: sticky footer bar with `[Save]` and `[Cancel]`. Close via × button, backdrop click, or Escape key.
+
+### JSON Viewer
+
+- Light-themed code block. Background: `#f8fafb`. Monospace font, 0.8rem.
+- **Syntax highlighting:**
+  - Keys: `primary` (`#17b3b3`) | String values: `#22863a` | Numbers: `#005cc5` | Booleans/null: `#e36209`
+- Navigation bar above viewer: "← Prev" | "{n} of {total}" | "Next →"
+- Max height: 480px with vertical scroll. Copy button copies current resource JSON to clipboard.
+
+### Debug Panel
+
+Matches sibling app conventions exactly.
+
+- Dark background `#263238` / `#1e272e`, green text `#aed581`.
+- Collapsible strip docked to bottom of Exchange view.
+- Collapsed state: 40px height. Expanded state: 280px height with scrollable entry list.
+- Each entry: `METHOD URL` in green monospace + HTTP status code + response time.
+- Client secrets redacted: first 4 chars visible, remainder replaced with `****`.
+
+---
+
+## Key Screen Mockups
+
+Full-fidelity HTML mockups follow in this document. Visual decisions in these files are the authority for any discrepancy with prose descriptions above.
+
+| Screen | What it anchors |
+|---|---|
+| Previous Payers | Payer card (compact + expanded), Roster tab, nav active state, env-pill |
+| Exchange Progress | Step tracker states (success/in-progress/pending), context bar, debug strip |
+| Results | Stat card row, resource explorer, JSON viewer, completion bar, action buttons |
+
+---
+
+## Do's and Don'ts
+
+**Do**
+- Use teal exclusively for interactive elements, active states, and success indicators
+- Show all 5 step states (pending / in-progress / success / failed + implied skipped) with distinct icons
+- Always pair a status badge color with an icon or text label — never use color as the sole status signal
+- Keep the debug panel dark per the established sibling app convention
+- Use monospace for all FHIR IDs, token values, and URLs in data display
+
+**Don't**
+- Don't use red for informational content — reserve `error` colors for genuine failures
+- Don't use browser-native `confirm()` / `alert()` — all confirmations are inline
+- Don't animate step transitions automatically — each step status must be readable for at least 300ms before advancing
+- Don't truncate raw FHIR values in the JSON viewer — full fidelity is the point
+- Don't teal-wash decorative elements (dividers, backgrounds, icons that aren't interactive)</script>
+<script type="text/plain" id="md-experience">## Foundation
+
+- **Form factor:** Desktop browser, single HTML file (`app.html`). No framework. Minimum width: 1024px.
+- **UI system:** None — vanilla HTML/CSS/JS per monorepo conventions. Visual identity defined in DESIGN.md; all tokens referenced as CSS custom properties.
+- **Shell:** Fixed left sidebar (220px expanded / 56px collapsed) + fixed top header (56px) + scrollable main content area. All three present on every surface.
+- **Entry:** `fhirapps/index.html` (monorepo launcher) → `PayerToPayerClient/app.html`.
+- **State persistence:** All configuration (`localStorage`). Exchange results: session-only (in-memory). No backend.
+
+---
+
+## Information Architecture
+
+### Shell
+
+```
+┌─ Header (fixed, 56px) ─────────────────────────────────────────────┐
+│  [≡]  P2P Exchange Tester        [New Payer chip]  [⚙]  [?]        │
+├─ Sidebar ──────┬─ Main content (scrollable) ────────────────────────┤
+│  [⬢] Previous  │                                                    │
+│      Payers    │  (view renders here)                               │
+│  [↔] Exchange  │                                                    │
+│  [📋] Results  │                                                    │
+│                │                                                    │
+│  [◀] Collapse  │                                                    │
+└────────────────┴────────────────────────────────────────────────────┘
+```
+
+### Surfaces
+
+**Previous Payers** (default landing view, sidebar item 1)
+- Payer list — compact payer cards, vertical stack
+  - Card expanded: tabbed detail panel with **Config** and **Roster** tabs
+  - Config tab: edit all payer fields inline
+  - Roster tab: member list with add / edit / delete
+- "Add Previous Payer" button: fixed above list; adds new card in edit mode at top
+
+**Exchange** (sidebar item 2)
+- Setup panel — payer selector + member selector + "Run Exchange" trigger
+- Progress panel — 4-step sequential tracker (replaces setup panel on trigger)
+  - Step 1: Token
+  - Step 2: Member Match
+  - Step 3: Scoped Token
+  - Step 4: Data Retrieval (sub-status per resource type)
+- "View Results" CTA — appears inline after all steps complete
+- Debug panel — collapsible strip docked to bottom of Exchange view
+
+**Results** (sidebar item 3)
+- Summary bar — stat cards, one per resource type, showing count
+- Resource explorer — tab bar (one tab per queried resource type)
+  - Resource list — individual resources within selected type
+  - JSON viewer — formatted JSON for selected resource
+- "Download NDJSON" button — fixed in Results header area
+- "New Exchange" button — fixed in Results header area; navigates to Exchange
+
+**Settings** (gear icon in header → right-side drawer overlay)
+- New Payer identity: name, client ID, client secret (masked)
+- Global CORS Proxy URL
+- Config File: Export button + Import button
+- Save / Cancel footer
+
+### Navigation flows
+
+| From | To | Trigger |
+|---|---|---|
+| Any | Previous Payers | Sidebar click |
+| Any | Exchange | Sidebar click |
+| Any | Results | Sidebar click (disabled when no session results) |
+| Any | Settings | Header gear icon |
+| Exchange (complete) | Results | "View Results" CTA button |
+| Results | Exchange | "New Exchange" button |
+
+Results sidebar item is **disabled** (grayed, non-interactive) when no exchange has completed in the current session. Tooltip on hover: "Run an exchange to see results."
+
+---
+
+## Voice and Tone
+
+**Register:** Professional, technical, direct. No marketing language. No cheerful affirmations. Errors are factual, specific, and actionable.
+
+**Principle:** A tester needs to diagnose problems, not just know that one occurred. Every status and error message names the specific value, step, or field that caused it.
+
+### Microcopy reference
+
+| Context | Text |
+|---|---|
+| Empty Previous Payers | "No Previous Payers configured. Add your first Previous Payer to get started." |
+| Empty Roster | "No members in this roster. Add a member to enable exchanges with {Payer Name}." |
+| Empty Results | "No exchange results yet. Run an exchange to see results here." |
+| Exchange trigger | "Run Exchange" |
+| Exchange running (button state) | "Running…" (disabled) |
+| Token success | "Access token acquired — expires in {n}s" |
+| Member match success | "Member matched — FHIR ID: {patient-id}" |
+| Scoped token success | "Member-scoped token acquired — scope: patient/{patient-id}.rs" |
+| Data retrieval complete | "{n} resource types queried — {total} resources retrieved" |
+| Member not found (422) | "Member not found at Previous Payer — check demographics or member ID. Submitted: {name}, DOB {dob}, Member ID {id}." |
+| Consent denied | "Consent denied by Previous Payer. Verify Consent resource construction." |
+| Scoped token failure | "Member-scoped token not supported by this server — this Previous Payer's auth server may not support patient-scoped client credentials. Data retrieval cannot proceed." |
+| Config import confirm | "This will replace your current configuration. All existing Previous Payers and Rosters will be overwritten. Continue?" |
+| Delete payer confirm | "Delete {Payer Name}? This will also delete its {n}-member Roster." |
+| Delete member confirm | "Remove {First Last} from this roster?" |
+| Config export success | "Config file downloaded." (transient toast, 3s) |
+| Token URL field label | "Token URL" (not "OAuth Endpoint" or "Auth URL") |
+| FHIR Base URL field label | "FHIR Base URL" |
+| Member ID field label | "Member ID at Previous Payer" |
+
+---
+
+## Component Patterns
+
+### Sidebar
+
+- Single active item at a time; active state persists across page interactions.
+- Collapse/expand: clicking the collapse toggle at sidebar bottom collapses to icon-only (56px). State persists in `localStorage`.
+- Collapsed: nav item labels hidden; icon tooltips appear on hover.
+- Keyboard: Tab through nav items; Enter/Space activates; sidebar is a `<nav>` landmark with `aria-label="Main navigation"`.
+
+### Payer Card
+
+- Default: compact one-row summary.
+- Expand: click anywhere on the header row. Only one card expanded at a time — expanding a second collapses the first.
+- Expanded body: Config tab is default-active on first expand. Roster tab retains its last state within the session.
+- Edit in Config tab: form fields replace read-only display. Save → compact. Cancel → compact, no changes.
+- Add Payer: clicking "+ Add Previous Payer" prepends a new card in expanded edit mode (no pre-filled values). Cancel removes the card.
+
+### Roster Table
+
+- Columns: Name | Date of Birth | Gender | Member ID at Previous Payer | Actions
+- Add Member: row appended at bottom of table in edit mode. All fields required; Save disabled until all filled.
+- Edit Member: clicking Edit on a row switches it to inline editable fields. Other rows remain read-only during edit.
+- Delete Member: inline confirmation replaces the row's action buttons — "{First Last}: [Delete] [Cancel]". No modal.
+- Empty table: shows message + "Add Member" CTA inline.
+
+### Exchange Setup Panel
+
+- Previous Payer selector: dropdown populated from configured payers. Default: "Select a Previous Payer".
+- Member selector: dropdown, empty and disabled until a Previous Payer is selected. On selection, populates with that payer's Roster.
+- "Run Exchange" button: disabled until both selectors have values. Disabled state shows tooltip.
+- Summary line below button (when both selected): "Testing {Payer Name} for {First Last} ({dob})".
+
+### Exchange Progress Panel
+
+- Replaces setup panel immediately on trigger.
+- All 4 steps render in pending state initially. Steps activate sequentially.
+- Each step row: clickable after completion (success or failed) to expand detail sub-panel.
+- Step detail sub-panels:
+  - **Token step:** token type, scope value, expiry countdown.
+  - **Member Match step:** demographics submitted (name, DOB, gender, member ID); matched FHIR ID on success; OperationOutcome issue text on failure.
+  - **Scoped Token step:** patient parameter value; scope value; token expiry.
+  - **Data Retrieval step:** resource-type-by-type status list (icon + type name + count). Individual failed queries shown with HTTP status.
+- "View Results" CTA: appears below Step 4 after all steps complete.
+- Failure: halts at failed step. Subsequent steps remain in pending state. Error message in step detail. "Try Again" button re-shows setup panel with prior selections intact.
+
+### Results Summary Bar
+
+- Horizontal scrolling row of stat cards (one per resource type: ExplanationOfBenefit, Condition, MedicationRequest, MedicationDispense, Observation, AllergyIntolerance, Immunization, Provenance).
+- Zero-count cards: count text in text-secondary, card slightly de-emphasized but not hidden.
+- Clicking a stat card activates that resource type's tab in the explorer below.
+
+### Resource Explorer
+
+- Tab bar: one tab per resource type. Active tab underlined in primary teal. Disabled tabs for types with 0 results — shown as disabled, not hidden.
+- Resource list within active tab: individual resources listed as compact rows.
+- Selecting a resource row: JSON viewer panel updates to show that resource's raw FHIR JSON.
+- JSON viewer navigation: Prev/Next buttons + keyboard arrow keys cycle through resources within the active type.
+- Copy button: copies the displayed JSON to clipboard. Shows "Copied!" for 1.5s then reverts.
+
+### Settings Drawer
+
+- Triggered by gear icon in header. Drawer slides in from right (200ms ease-out). Width: 360px. Full-height.
+- Semi-transparent backdrop behind drawer; click backdrop to close.
+- Client secret field: `type="password"`, masked by default. Show/hide toggle within the field.
+- Save: writes all fields to `localStorage`, shows confirmation inline in drawer, closes after 800ms.
+- Export Config: immediate file download. Shows inline "Config file downloaded." feedback.
+- Import Config: file picker (`.json` only). After file selection: parse and validate → if invalid, show inline error. If valid, show inline confirmation with payer/member counts.
+
+### Debug Panel
+
+- Toggle button fixed in Exchange view (bottom of page). Label: "Debug Panel" + entry count badge.
+- Collapsed height: 40px. Expanded height: 280px (CSS transition, 150ms ease).
+- Each exchange step generates one or more entries. Entries are append-only within a session run.
+- Dark background (#263238 / #1e272e), green text (#aed581).
+- Client secrets redacted: first 4 chars visible, remainder replaced with `****`.
+
+---
+
+## State Patterns
+
+### Exchange States
+
+| State | Setup Panel | Progress Panel | "View Results" | Trigger Button |
+|---|---|---|---|---|
+| `idle` | Visible, enabled | Hidden | Hidden | Enabled (if configured) |
+| `running` | Hidden or grayed | Visible, active step animating | Hidden | Hidden (replaced by "Running…") |
+| `complete` | Hidden | Visible, all success | Visible | "Run New Exchange" link |
+| `failed` | Hidden | Visible, failed step highlighted | Hidden | "Try Again" button |
+
+### Empty States
+
+| Surface | Condition | Treatment |
+|---|---|---|
+| Previous Payers | No payers configured | Centered placeholder + message + "Add Previous Payer" CTA |
+| Roster tab | No members in roster | Inline message + "Add Member" CTA within tab |
+| Results | No session results | Centered message + "Go to Exchange" CTA button |
+| Member selector | Previous Payer has no Roster | "No members — add members first." Disabled selector + link to Roster tab |
+
+### Error States
+
+| Trigger | Location | Treatment |
+|---|---|---|
+| Token request fails | Step 1 detail | HTTP status + error body text. Step icon → failed. |
+| Member match 422 | Step 2 detail | Specific message with submitted demographics (per microcopy table). |
+| Scoped token fails | Step 3 detail | Server-capability message (per microcopy table). |
+| Individual resource query fails | Step 4 sub-status | "{ResourceType}: HTTP {status}" per type. Does not halt other type queries. |
+| Config import invalid | Settings drawer | Inline error below Import button — "Invalid file: {reason}" |
+| Required field empty (forms) | Inline under field | "{Field name} is required." Red border on input. |
+
+---
+
+## Interaction Primitives
+
+### Keyboard
+
+| Interaction | Key |
+|---|---|
+| Navigate sidebar items | Tab / Shift+Tab, Enter to activate |
+| Close Settings drawer | Escape |
+| Cycle JSON viewer resources | ← / → arrow keys (when JSON viewer has focus) |
+| Confirm inline dialogs | Enter (when confirm button focused) |
+| Cancel inline dialogs | Escape |
+
+### Focus Management
+
+- Settings drawer open: focus moves to first focusable element; Tab cycles within drawer only; closing returns focus to gear icon.
+- Payer card expand: focus moves to first focusable element within expanded panel.
+- Exchange trigger: after clicking "Run Exchange", focus moves to the active step in the progress panel.
+- Inline delete confirm: focus moves to the Confirm button within the row.
+
+### Transitions
+
+| Element | Duration | Easing |
+|---|---|---|
+| Sidebar collapse/expand | 200ms | ease-in-out |
+| Settings drawer slide | 200ms | ease-out |
+| Payer card expand/collapse | 200ms | ease |
+| Debug panel open/close | 150ms | ease |
+| Step status icon update | 300ms | ease (minimum visible before next step activates) |
+
+---
+
+## Accessibility Floor
+
+- All interactive elements reachable and activatable via keyboard.
+- Focus ring: 2px solid primary teal, 2px offset — visible on all focusable elements, never suppressed.
+- Status indicators: never color-only. Every status badge, step icon, and stat card combines color + icon + text label.
+- ARIA landmarks: `<header>`, `<nav aria-label="Main navigation">`, `<main>`. Settings drawer: `role="dialog" aria-modal="true" aria-labelledby="settings-title"`.
+- Step status updates: wrapped in `<div aria-live="polite">` so screen readers announce step completion and failure.
+- Form labels: explicit `<label for="...">` bindings for all inputs. Required fields: `aria-required="true"` + visible asterisk in label.
+- Error messages: linked to their input via `aria-describedby`.
+- Minimum click target: 40px height/width for all interactive controls.
+- Results sidebar item when disabled: `aria-disabled="true"`, tooltip on hover, not `hidden`.
+
+---
+
+## Key Flows
+
+### UJ-1: Alex configures a new Previous Payer before a connectathon
+
+Alex has received credentials from a payer participating in an upcoming HL7 connectathon.
+
+1. **App loads** → Previous Payers view (empty state with "Add Previous Payer" CTA).
+2. **Alex clicks "Add Previous Payer"** → new card appears in expanded edit mode at top of list.
+3. **Alex fills Config tab:** Display Name, FHIR Base URL, Token URL, Client ID, Client Secret, Token Auth Method, CORS Proxy toggle.
+4. **Saves** → card collapses to compact view, payer visible in list.
+5. **Alex clicks the payer card** → expands → selects **Roster** tab.
+6. **Clicks "+ Add Member"** → inline row form appears at bottom of (empty) table.
+7. **Fills:** First Name, Last Name, Date of Birth, Gender, Member ID at Previous Payer → Save. Row commits to table.
+8. **Repeats step 7** for two more members.
+9. **Alex opens Settings drawer** → clicks **Export Config File** → JSON file downloads immediately → "Config file downloaded." inline feedback.
+10. **Alex shares the JSON file** with a colleague via email/Slack.
+11. **Colleague opens app** → Settings drawer → **Import Config File** → selects the JSON → confirmation shows payer/member counts → [Import] → config loads.
+
+**Climax:** Colleague's app shows the same Previous Payer with the same 3-member Roster — no re-entry required.
+
+---
+
+### UJ-2: Alex runs a P2P exchange to validate an Previous Payer's API
+
+Alex is testing whether the payer correctly returns ExplanationOfBenefit resources after a member match.
+
+1. **Alex navigates to Exchange** (sidebar item 2). Setup panel visible.
+2. **Previous Payer selector:** drops down, shows configured payers → selects target payer.
+3. **Member selector:** populates → selects one member from Roster.
+4. **Summary line appears:** "Testing {Payer Name} for {First Last} ({dob})."
+5. **Alex clicks "Run Exchange"** → setup panel hides; progress tracker appears with all 4 steps in pending state.
+6. **Step 1 — Token:** spinner activates → "Access token acquired — expires in 299s" (green check).
+7. **Step 2 — Member Match:** spinner → "Member matched — FHIR ID: patient/abc123" (green check).
+8. **Step 3 — Scoped Token:** spinner → "Member-scoped token acquired" (green check).
+9. **Step 4 — Data Retrieval:** spinner → per-resource sub-status appears inline. All complete.
+10. **"View Results" CTA** appears below Step 4. Alex clicks → navigates to Results.
+11. **Summary bar:** stat cards show "ExplanationOfBenefit: 12 | Condition: 4 | MedicationRequest: 3…"
+12. **Alex clicks ExplanationOfBenefit stat card** → tab activates in resource explorer. Selects one resource → JSON viewer shows full raw JSON.
+13. **Alex clicks "Download NDJSON"** → full payload downloads.
+
+---
+
+### UJ-3: Alex demonstrates the exchange to a client
+
+1. **Before the session:** Alex imports the demo config file (pre-prepared with client's UAT payer credentials and test members).
+2. **App loaded** → Previous Payers view shows the client's payer configured with test members.
+3. **Alex navigates to Exchange** → selects client's payer + a test member → narrates each configuration detail.
+4. **Clicks "Run Exchange"** → progress panel activates. Alex narrates each step as it completes.
+5. **All steps succeed** → "View Results" CTA appears. Alex clicks.
+6. **Results view:** walks client through summary bar counts → clicks ExplanationOfBenefit tab → selects one resource → shows raw JSON.
+7. **Alex opens debug panel** → expands the Member Match entry → shows client the full HTTP request and response.
+
+**Climax:** Client sees a live end-to-end P2P exchange completing against their own UAT FHIR API, with full request/response transparency.</script>
+<script type="text/plain" id="md-architecture"># Architecture Spine — PayerToPayerClient
+
+## Design Paradigm
+
+**Modular-document.** The application is a single HTML file (`app.html`) whose globally-scoped JS is organized into five module namespaces: `ConfigModule`, `ExchangeModule`, `ResultsModule`, `UIModule`, and `DebugModule`. `UIModule` is the sole orchestrator — it calls all other modules and owns view transitions. Data modules own their state tier and are called by `UIModule`; they never call `UIModule` back (they return values). `DebugModule` is a passive append-only sink called only by `ExchangeModule`.
+
+No framework, no routing library, no build step. The browser is the runtime. All conventions (inline CSS, inline JS, `innerHTML` rendering, global scope) are load-bearing constraints from the monorepo.
+
+---
+
+## Invariants & Rules
+
+### AD-1 — Single-file, no-module architecture
+
+- **Binds:** all code
+- **Prevents:** ES module syntax, external CSS/JS files (other than `config.js`), bundler output
+- **Rule:** The app is a static HTML file. No `import`, `export`, or `type="module"`. All scripts are inline `<script>` or `<script src="...">` in global scope. Cross-file helpers are exposed as `window.ModuleName = ModuleName` singletons.
+
+### AD-2 — `innerHTML` template-literal rendering
+
+- **Binds:** `UIModule` and all view code
+- **Prevents:** `createElement`/`appendChild` approaches that diverge from the monorepo rendering convention
+- **Rule:** All DOM mutations use `element.innerHTML = html`. HTML is accumulated in a `let html = ''` local variable and assigned once, atomically. No direct node manipulation.
+
+### AD-3 — State partitioned by persistence tier
+
+- **Binds:** `ConfigModule`, `ExchangeModule`, `ResultsModule`
+- **Rule:** Three tiers, one owner each:
+  - **Config tier** (`localStorage`, key `'p2pConfig'`): New Payer identity, `corsProxyUrl`, all Previous Payers and their Rosters. Owned by `ConfigModule`.
+  - **Exchange result tier** (in-memory JS variable): result of the most recent Exchange. Owned by `ExchangeModule`. Never written to `localStorage`.
+  - **UI state tier** (in-memory, some keys in `localStorage`): current view, sidebar collapsed state. Owned by `UIModule`.
+
+### AD-4 — No fhirclient; native fetch() only
+
+- **Binds:** `ExchangeModule`
+- **Prevents:** loading `fhirclient` — it is an EHR launch library and does not support client credentials
+- **Rule:** All token requests and FHIR queries use `fetch()`. No `FHIR.*` calls.
+
+### AD-5 — referrerPolicy on every external fetch
+
+- **Binds:** `ExchangeModule` (all token and FHIR requests)
+- **Prevents:** Keycloak and other auth servers rejecting requests that leak the Referer header
+- **Rule:** Every `fetch()` call to an external URL includes `referrerPolicy: 'no-referrer'`. No exceptions.
+
+### AD-6 — CORS proxy routing convention
+
+- **Binds:** `ExchangeModule`
+- **Rule:** When `payer.useProxy === true` and `config.corsProxyUrl` is non-empty, replace the target URL: `const url = config.corsProxyUrl + '?url=' + encodeURIComponent(originalUrl)`. Applies to both token requests and FHIR requests.
+
+### AD-7 — Exchange is sequential and halting
+
+- **Binds:** `ExchangeModule` (step orchestration)
+- **Rule:** Steps execute in fixed order: `getSystemToken` → `memberMatch` → `getMemberScopedToken` → `retrieveResources`. Each step function returns `{ ok: boolean, data: any, error: string|null }`. A step where `ok === false` stops the exchange. `getMemberScopedToken` failure does not fall back to the system token.
+
+### AD-8 — Canonical config JSON shape
+
+- **Binds:** `ConfigModule`, FR-5 export, FR-6 import
+- **Rule:** One canonical shape governs both `localStorage` and the Config File:
+
+```js
+{
+  newPayer: { name, clientId, clientSecret },
+  corsProxyUrl: string,
+  previousPayers: [
+    {
+      id: string,               // crypto.randomUUID() at creation; never reassigned
+      name, fhirBaseUrl, tokenUrl, clientId, clientSecret,
+      tokenAuthMethod: 'client_secret_post' | 'client_secret_basic',
+      useProxy: boolean,
+      roster: [
+        { id, firstName, lastName, dateOfBirth, gender, memberIdAtOldPayer }
+      ]
+    }
+  ]
+}
+```
+
+`dateOfBirth` is `YYYY-MM-DD`. `gender` is `'male' | 'female' | 'other' | 'unknown'`. Config File import replaces entirely — no merge.
+
+### AD-9 — View routing via JS variable; no URL changes
+
+- **Binds:** `UIModule`
+- **Rule:** Current view is a module-level string (`'previous-payers' | 'exchange' | 'results'`). `UIModule.showView(name)` replaces `#app-main` innerHTML. No URL changes on navigation. The `results` nav item is rendered non-interactive until `ExchangeModule.hasResult()` returns true.
+
+### AD-10 — $member-match request shape
+
+- **Binds:** `ExchangeModule` (memberMatch step)
+- **Rule:** POST `{fhirBaseUrl}/Patient/$member-match`, `Content-Type: application/fhir+json`, `Authorization: Bearer {systemToken}`, `referrerPolicy: 'no-referrer'`. Body is a FHIR R4 Parameters resource with four named parameters: `MemberPatient`, `CoverageToMatch`, `CoverageToLink`, `Consent` (scope "everything", 5-year lookback). A 422 response is a business outcome — parse and display OperationOutcome; do not treat as a fetch error.
+
+### AD-11 — Token request encoding
+
+- **Binds:** `ExchangeModule` (getSystemToken, getMemberScopedToken)
+- **Prevents:** sending token requests as JSON (breaks Keycloak and most OAuth 2.0 servers)
+- **Rule:** Token requests POST `Content-Type: application/x-www-form-urlencoded` with body as `URLSearchParams`. `client_secret_basic` sends credentials as `Authorization: Basic {btoa(clientId + ':' + clientSecret)}` and omits them from the body. `client_secret_post` includes `client_id` and `client_secret` in the body.
+
+### AD-12 — config.js exports FHIR_SERVERS keyed to Previous Payers
+
+- **Binds:** `config.js`, `ConfigModule`
+- **Rule:** `config.js` exports `FHIR_SERVERS` — an object keyed by payer handle where each value is a Previous Payer seed config (AD-8 field set, without `id` or `roster`). `ConfigModule.seedFromDefaults()` converts each entry to full AD-8 shape on cold start.
+
+### AD-13 — Module dependency direction
+
+- **Binds:** all modules
+- **Rule:** Dependency direction is UIModule → {ConfigModule, ExchangeModule, ResultsModule, DebugModule}; ExchangeModule → DebugModule. No other cross-module calls. ExchangeModule receives payer config as function arguments — it does not read from ConfigModule directly.
+
+```
+UIModule ──► ConfigModule
+         ──► ExchangeModule ──► DebugModule
+         ──► ResultsModule
+         ──► DebugModule
+```
+
+### AD-14 — Exchange step flow
+
+Step 4 resource-type queries may run in parallel via `Promise.all` — they are independent of each other. Steps 1–3 remain strictly sequential.
+
+```
+UIModule            ExchangeModule       Token Endpoint     FHIR Server
+   |                     |                    |                  |
+   |── runExchange() ───►|                    |                  |
+   |                     |── POST /token ────►|                  |
+   |                     |◄── access_token ──|                  |
+   |                     |── POST /$member-match ──────────────►|
+   |                     |◄── Patient FHIR ID ────────────────── |
+   |                     |── POST /token (member scope) ────────►|
+   |                     |◄── member_access_token ────────────── |
+   |                     |── GET /EOB?patient=... (parallel) ──►|
+   |                     |── GET /Condition?patient=... ────────►|
+   |                     |── GET /... ────────────────────────── |
+   |                     |◄── Bundles ──────────────────────────|
+   |◄── ExchangeResult ─|                    |                  |
+```
+
+---
+
+## Consistency Conventions
+
+| Concern | Convention |
+|---|---|
+| Naming | entities/functions: `camelCase`; CSS classes: `kebab-case`; constants: `UPPER_SNAKE_CASE` |
+| IDs | Payer and member IDs: `crypto.randomUUID()` at creation; stored as strings; never reassigned |
+| Config read | `const config = JSON.parse(localStorage.getItem('p2pConfig') ?? 'null')` — if null, seed from `FHIR_SERVERS` |
+| Error return shape | `{ ok: false, error: 'human-readable string' }` — never throw across module boundaries |
+| FHIR fetch headers | `Accept: application/fhir+json`, `Authorization: Bearer {token}`, `referrerPolicy: 'no-referrer'` |
+| Debug redaction | Client secret values: first 4 chars visible + `****` for remainder; applied before logging |
+| Scope syntax | System token: `system/*.rs`; member-scoped: `patient/{fhirId}.rs` |
+| NDJSON filename | `{payerName}_{memberLastName}-{memberFirstName}_{YYYY-MM-DD}.ndjson` (spaces → `-`) |
+
+---
+
+## Stack
+
+| Name | Version |
+|---|---|
+| Browser runtime | ES2020+ (no transpilation; Chrome/Edge/Firefox current) |
+| HTML / CSS / JS | HTML5 · CSS3 · ES2020 |
+| OAuth 2.0 | Client Credentials grant (RFC 6749 §4.4) |
+| FHIR | R4 (4.0.1) |
+| Da Vinci HRex | 1.0.0 ($member-match operation) |
+| Da Vinci PDex | 2.1.0 |
+| Hosting | GitHub Pages (static; auto-deploy on push to `main`) |
+| CORS proxy | Cloudflare Worker (existing; deployed via `wrangler deploy`) |
+
+---
+
+## Structural Seed
+
+```
+PayerToPayerClient/
+  app.html              # SPA — inline <style> in <head>, inline <script> at end of <body>
+  config.js             # Exports FHIR_SERVERS (AD-12 shape, seed values)
+  index.html            # Monorepo entry — launcher
+  cors-proxy-worker.js  # Cloudflare Worker — deployed separately
+```
+
+`app.html` JS organisation (logical modules, all globally scoped):
+
+```
+app.html <script>
+  ConfigModule   — localStorage read/write; Previous Payer + Roster CRUD; export/import
+  ExchangeModule — runExchange(); step functions; session result state
+  ResultsModule  — helpers for rendering result data (resource counts, NDJSON build)
+  DebugModule    — appendEntry(); redact(); render()
+  UIModule       — showView(); renderOldPayers(); renderExchange(); renderResults();
+                   event binding; init()
+  init()         — entry point; called immediately (synchronous)
+```
+
+---
+
+## System Context
+
+```
+Tester (Alex)
+     │
+     ▼
+app.html (browser SPA)
+     │              │
+     ▼              ▼
+localStorage    Cloudflare Worker CORS Proxy
+                     │              │
+                     ▼              ▼
+              Token Endpoint    FHIR Server
+             (Keycloak/OAuth)  (R4/Da Vinci PDex)
+```
+
+---
+
+## Capability → Architecture Map
+
+| Capability | Lives in | Governed by |
+|---|---|---|
+| FR-1–7: Config Management | `ConfigModule` | AD-3, AD-8, AD-12 |
+| FR-8–11: Roster Management | `ConfigModule` | AD-3, AD-8 |
+| FR-12–13: Exchange setup (selectors) | `UIModule` | AD-9 |
+| FR-14: System token | `ExchangeModule.getSystemToken()` | AD-4, AD-5, AD-6, AD-7, AD-11 |
+| FR-15: $member-match | `ExchangeModule.memberMatch()` | AD-5, AD-6, AD-7, AD-10 |
+| FR-16: Member-scoped token | `ExchangeModule.getMemberScopedToken()` | AD-4, AD-5, AD-7, AD-11 |
+| FR-17: Resource retrieval (8 types) | `ExchangeModule.retrieveResources()` | AD-4, AD-5, AD-7 |
+| FR-18–19: Step status + failure display | `UIModule` + `ExchangeModule` | AD-2, AD-7 |
+| FR-20–23: Results Viewer | `ResultsModule` + `UIModule` | AD-3, AD-9 |
+| FR-24: Debug panel | `DebugModule` | AD-2, AD-13 |
+
+---
+
+## Deferred
+
+- **Per-payer OAuth scope field** — whether `system/*.rs` / `patient/*.rs` needs to be configurable per Previous Payer; held until server testing reveals syntax variability.
+- **CoverageToMatch full field set** — exact Coverage fields beyond `memberIdAtOldPayer` + plan name; validated against real servers before confirming.
+- **Queryable resource-type configurability** — whether the 8-type default set becomes per-payer configurable; deferred until production server testing.
+- **Module file extraction** — whether ExchangeModule or ConfigModule grows large enough to justify extraction to a separate `.js` file; AD-1 governs.
+- **Cross-session exchange history** — session-scoped only in MVP; persistence strategy deferred.
+- **Config merge-on-import** — replace-only in MVP; conflict-resolution strategy deferred to v2.
+- **NDJSON payload size warning** — threshold for warning on large downloads; deferred.</script>
+<script type="text/plain" id="md-epics"># PayerToPayerClient — Epic Breakdown
+
+## Overview
+
+This document provides the complete epic and story breakdown for PayerToPayerClient, decomposing the requirements from the PRD, Architecture Spine, and UX Design contracts into implementable stories.
+
+---
+
+## Epic List
+
+| Epic | Goal | FRs |
+|---|---|---|
+| Epic 1 | App Foundation & Previous Payer Configuration | FR-1 through FR-7 |
+| Epic 2 | Member Roster Management | FR-8 through FR-11 |
+| Epic 3 | Exchange Execution | FR-12 through FR-19 |
+| Epic 4 | Results & Diagnostics | FR-20 through FR-24 |
+
+---
+
+## Epic 1: App Foundation & Previous Payer Configuration
+
+A tester can open the app, configure their New Payer identity, add/edit/delete Previous Payers with all connection details, and export/import the full configuration as a portable JSON file — establishing a reusable test environment.
+
+**FRs covered:** FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7
+
+---
+
+### Story 1.1: App Shell & Navigation Structure
+
+As a tester, I want to open `app.html` in a browser and see a structured P2P Exchange Tester interface with header, collapsible sidebar, and main content area, so that I can orient myself and navigate between the app's three screens.
+
+**Acceptance Criteria:**
+
+- Given I open `app.html`, then I see a 56px fixed header with a 2×2 teal square logo mark, "P2P Exchange Tester" title, and a settings gear icon
+- Sidebar has nav items "Previous Payers" (active by default), "Exchange", and "Results"
+- "Results" is rendered with `aria-disabled="true"` and shows a tooltip on hover explaining no results are available
+- Clicking "Previous Payers" or "Exchange" calls `UIModule.showView()` and replaces `#app-main` content
+- Sidebar collapse toggle reduces the sidebar to 56px (icon-only); state persisted to `localStorage` key `'p2pSidebarCollapsed'`
+- Full CSS custom property token system applied: `--color-primary: #17b3b3`, `--color-page-bg: #f0f5f9`, plus dark mode via `@media (prefers-color-scheme: dark)` and `:root[data-theme="dark"/"light"]` override
+- ARIA landmarks present: `<header>`, `<nav>`, `<main>`
+
+**Status: Done** *(implemented in Story 1.1 sprint)*
+
+---
+
+### Story 1.2: ConfigModule & FHIR_SERVERS Cold-Start
+
+As a tester, I want the app to auto-populate Previous Payers from built-in defaults on first launch and restore my saved configuration on subsequent launches, so that I have a working starting point without any manual setup.
+
+**Acceptance Criteria:**
+
+- Given `config.js` exports `FHIR_SERVERS` and `localStorage['p2pConfig']` is absent, then `ConfigModule.seedFromDefaults()` creates a full AD-8 config: assigns `crypto.randomUUID()` IDs, adds `roster: []`, sets `newPayer` and `corsProxyUrl` to empty strings, writes to `localStorage`
+- The Previous Payers view renders the seeded payer(s) as collapsed cards showing name and "0 members"
+- Given `localStorage['p2pConfig']` is present, then config is restored without calling `seedFromDefaults()` (UUIDs unchanged)
+- `ConfigModule` exposes: `getConfig()`, `saveConfig(config)`, `addPayer(payerObj)`, `updatePayer(id, fields)`, `deletePayer(id)`
+- Payer names containing `<script>` render as literal text without executing JS
+
+**Status: Done** *(implemented in Story 1.2 sprint)*
+
+---
+
+### Story 1.3: Settings Drawer — New Payer Identity & CORS Proxy URL
+
+As a tester, I want to configure my New Payer identity (name, client ID, client secret) and global CORS Proxy URL via a Settings drawer, so that the app knows my identity as the requesting payer for all exchanges.
+
+**Acceptance Criteria:**
+
+- Clicking settings gear icon opens a 360px drawer sliding in from the right over a semi-transparent backdrop in 200ms
+- Drawer contains: New Payer Name, Client ID, Client Secret (masked, with show/hide toggle), CORS Proxy URL fields
+- Tab key cycles focus within the drawer only (focus trap)
+- Pressing Escape or clicking the backdrop closes without saving
+- `role="dialog" aria-modal="true" aria-labelledby="settings-title"` are present
+- Clicking Save updates `localStorage` and the header updates: non-empty name shows a teal chip; empty name hides the chip
+
+---
+
+### Story 1.4: Add Previous Payer
+
+As a tester, I want to add a new Previous Payer with all connection details, so that I can test exchanges against any FHIR endpoint.
+
+**Acceptance Criteria:**
+
+- Clicking "Add Previous Payer" opens a new payer card in expanded/edit state with fields: Display Name, FHIR Base URL, Token URL, Client ID, Client Secret (masked), Token Auth Method (dropdown: `client_secret_post` | `client_secret_basic`), CORS Proxy toggle
+- Filling all required fields and clicking Save: `ConfigModule.addPayer()` adds the entry with `id: crypto.randomUUID()` and `roster: []`; card collapses showing payer name and "0 members"
+- Only one card expanded at a time — any other expanded card collapses
+- Clicking Save with empty required fields shows inline validation errors and blocks save
+
+---
+
+### Story 1.5: Edit & Delete Previous Payer
+
+As a tester, I want to edit a Previous Payer's connection details and delete payers I no longer need, so that I can keep my configuration accurate.
+
+**Acceptance Criteria:**
+
+- Expanding a payer card and viewing Config tab: all connection fields pre-filled with current values
+- Changing any field and clicking Save updates `localStorage` via `ConfigModule.updatePayer(id, fields)`
+- Clicking Delete shows inline confirmation: "Delete '[Payer Name]' and its [N] member(s)?" with Confirm and Cancel buttons (no modal)
+- Clicking Confirm calls `ConfigModule.deletePayer(id)` and removes the card from view
+
+---
+
+### Story 1.6: Config Export & Import
+
+As a tester, I want to export the full configuration as a JSON file and import a previously saved configuration, so that I can share test setups with colleagues.
+
+**Acceptance Criteria:**
+
+- Clicking "Export Config": a JSON file downloads immediately containing the full AD-8 config shape (pretty-printed); inline "Config file downloaded." appears below the button
+- Clicking "Import Config" and selecting a `.json` file:
+  - If valid AD-8 shape: inline confirmation shows "Replace config with [N] payer(s) and [M] member(s) total?" → Proceed calls `ConfigModule.saveConfig()` and re-renders
+  - If invalid: inline error message shown, `localStorage` unchanged
+
+---
+
+## Epic 2: Member Roster Management
+
+A tester can populate any Previous Payer's Roster with test Members, edit their demographics, and delete them — making the Roster ready for Exchange runs.
+
+**FRs covered:** FR-8, FR-9, FR-10, FR-11
+
+---
+
+### Story 2.1: Roster Tab & Member Table
+
+As a tester, I want to see each Previous Payer's Member Roster in a dedicated Roster tab, so that I can verify which members are configured before running exchanges.
+
+**Acceptance Criteria:**
+
+- Expanding a payer card and clicking the "Roster" tab shows a table with columns: Name | Date of Birth | Gender | Member ID at Previous Payer | Actions
+- Empty roster: "No members in this roster. Add a member to enable exchanges with [Payer Name]." + inline "Add Member" button
+- Members present: each row shows full name and Member ID, with Edit and Delete action controls
+
+---
+
+### Story 2.2: Add Member to Roster
+
+As a tester, I want to add a Member to a Previous Payer's Roster with their demographic information, so that I can run exchanges for specific test members.
+
+**Acceptance Criteria:**
+
+- Clicking "Add Member" shows a new row form with fields: First Name, Last Name, Date of Birth (YYYY-MM-DD), Gender (dropdown: `male` | `female` | `other` | `unknown`), Member ID at Previous Payer
+- All five fields required; Save disabled until all filled
+- Clicking Save: `ConfigModule.updatePayer(id, { roster: [...roster, newMember] })` with `id: crypto.randomUUID()`; new member appears as read-only table row
+- Payer card compact header updates to reflect new member count
+
+---
+
+### Story 2.3: Edit & Delete Member
+
+As a tester, I want to edit a Member's details and remove members I no longer need, so that I can maintain accurate Roster data.
+
+**Acceptance Criteria:**
+
+- Clicking Edit on a member row: row switches to inline editable fields pre-filled with current values; only that row is in edit mode
+- Clicking Save: `ConfigModule.updatePayer()` with updated roster; row returns to read-only
+- Clicking Cancel: dismisses without saving
+- Clicking Delete: inline confirmation "Remove [First Last] from this roster? [Delete] [Cancel]" (no modal)
+- Clicking Delete: removes the member from `localStorage`; payer card header updates member count
+
+---
+
+## Epic 3: Exchange Execution
+
+A tester can select a Previous Payer and Member, trigger a P2P Exchange, and watch the 4-step flow (Token → Member Match → Scoped Token → Data Retrieval) execute with real-time status, expandable step detail, and actionable failure messages.
+
+**FRs covered:** FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19
+
+---
+
+### Story 3.1: Exchange Setup Panel
+
+As a tester, I want to select a Previous Payer and Member before running an exchange, so that I know exactly what test scenario I'm executing before triggering it.
+
+**Acceptance Criteria:**
+
+- Exchange screen shows: "Previous Payer" dropdown (all configured payers), "Member" dropdown (disabled until payer selected), "Run Exchange" button (disabled until both selected)
+- Selecting a Previous Payer: Member dropdown enables and populates with that payer's roster
+- Both selected: summary line "Testing [Payer Name] for [First Last] ([dateOfBirth])" appears; "Run Exchange" button becomes enabled
+
+---
+
+### Story 3.2: ExchangeModule Scaffold & System Token (Step 1)
+
+As a tester, I want to see real-time step status as the exchange begins with the system token request, so that I can immediately tell whether my New Payer credentials are accepted.
+
+**Acceptance Criteria:**
+
+- Clicking "Run Exchange": setup panel replaced by step tracker showing 4 steps in pending state
+- `ExchangeModule.runExchange(payer, member)` called; receives payer config as function arguments (never reads ConfigModule directly per AD-13)
+- `getSystemToken()` POSTs to `payer.tokenUrl` with `Content-Type: application/x-www-form-urlencoded`, `URLSearchParams` body, `scope=system/*.rs`, `referrerPolicy: 'no-referrer'`
+- `client_secret_basic`: `Authorization: Basic btoa(clientId + ':' + clientSecret)`, credentials omitted from body
+- `client_secret_post`: credentials included in body
+- CORS proxy wrapping applied if `payer.useProxy === true` (AD-6)
+- Step 1 success: Token step icon updates to success; detail sub-panel shows token scope and expiry; Step 2 advances to in-progress
+- Step 1 fails: Token step icon updates to failed; error message shown inline; Steps 2–4 remain pending
+
+---
+
+### Story 3.3: $member-match & Member Match Failure Handling (Step 2)
+
+As a tester, I want Step 2 to submit member demographics to `$member-match` and surface specific failure reasons, so that I can diagnose demographic mismatches or consent issues immediately.
+
+**Acceptance Criteria:**
+
+- `memberMatch()` POSTs to `{payer.fhirBaseUrl}/Patient/$member-match` with `Authorization: Bearer {systemToken}`, `Content-Type: application/fhir+json`, `referrerPolicy: 'no-referrer'`
+- Body is a FHIR R4 Parameters resource with four named parameters: `MemberPatient`, `CoverageToMatch`, `CoverageToLink`, `Consent` (everything scope, 5-year lookback) per AD-10
+- HTTP 200: Step 2 updates to success; detail sub-panel shows demographics submitted and matched FHIR ID; Step 3 advances
+- HTTP 422 "member not found": Step 2 failed with message: "Member not found at Previous Payer — check demographics or member ID. Submitted: [First Last], DOB [dateOfBirth], Member ID [memberIdAtOldPayer]."
+- HTTP 422 "consent denied": Step 2 failed with distinct message: "Consent denied by Previous Payer. Verify Consent resource construction."
+- Exchange halts on 422; Steps 3–4 remain pending
+
+---
+
+### Story 3.4: Member-Scoped Token (Step 3)
+
+As a tester, I want Step 3 to request a token scoped to the matched Member's FHIR ID, so that subsequent resource queries are properly authorized at the member level.
+
+**Acceptance Criteria:**
+
+- `getMemberScopedToken()` POSTs to `payer.tokenUrl` using same Token Auth Method encoding as Step 1 (AD-11), with `scope=patient/{fhirId}.rs`, `referrerPolicy: 'no-referrer'`
+- Step 3 success: detail sub-panel shows patient parameter and scope value; Step 4 advances
+- Step 3 fails: step updates to failed with message: "Member-scoped token not supported by this server — this Previous Payer's auth server may not support patient-scoped client credentials. Data retrieval cannot proceed."
+- Exchange halts; Step 4 remains pending; **no fallback to the system token** (AD-7)
+
+---
+
+### Story 3.5: Resource Retrieval & Exchange Completion (Step 4)
+
+As a tester, I want Step 4 to retrieve all 8 FHIR resource types and signal exchange completion, so that I can proceed to the Results screen with complete data.
+
+**Acceptance Criteria:**
+
+- `retrieveResources()` queries all 8 resource types via `Promise.all`: ExplanationOfBenefit, Condition, MedicationRequest, MedicationDispense, Observation, AllergyIntolerance, Immunization, Provenance (AD-14)
+- Each query: `GET {fhirBaseUrl}/{ResourceType}?patient={fhirId}` with `Accept: application/fhir+json`, `Authorization: Bearer {memberToken}`, `referrerPolicy: 'no-referrer'`
+- Zero-result types (empty Bundle) counted as success, not errors
+- All queries resolve: Step 4 updates to success; detail sub-panel shows per-resource-type counts; `ExchangeModule.hasResult()` returns true
+- "View Results" CTA appears below step tracker; Results sidebar item becomes interactive
+- Individual resource type query failures show "{ResourceType}: HTTP {status}" in Step 4 sub-panel; other types continue unaffected
+- `access_token` values NOT logged to browser console at any point (NFR-6)
+
+---
+
+## Epic 4: Results & Diagnostics
+
+A tester can inspect retrieved FHIR resources by type and in raw JSON, download the full payload as NDJSON, and diagnose API issues via the debug panel — completing the full testing workflow.
+
+**FRs covered:** FR-20, FR-21, FR-22, FR-23, FR-24
+
+---
+
+### Story 4.1: Results View & Stat Card Row
+
+As a tester, I want to see a summary of retrieved FHIR resources by type when I navigate to Results, so that I can quickly assess what data the exchange returned before drilling in.
+
+**Acceptance Criteria:**
+
+- Results view header: "New Exchange" (secondary style) and "Download NDJSON" (primary/teal style) buttons
+- Horizontally scrollable row of 8 stat cards — one per resource type — each showing type name and count
+- Zero-count cards: count in `text-secondary` color, not hidden (FR-20)
+- Clicking a stat card activates that resource type's tab in the explorer below
+- Clicking "New Exchange" navigates to Exchange screen with prior payer/member selection preserved
+- `ExchangeModule.hasResult()` false: Results sidebar item remains `aria-disabled="true"`; navigation blocked
+
+---
+
+### Story 4.2: Resource Explorer & JSON Viewer
+
+As a tester, I want to browse individual FHIR resources by type and view their raw JSON, so that I can inspect data quality and conformance details for each resource.
+
+**Acceptance Criteria:**
+
+- Tab bar with one tab per resource type (8 tabs); zero-result tabs rendered disabled, not hidden
+- Active tab: two-column layout — resource list (left) + JSON viewer (right)
+- Selecting a resource: JSON viewer renders full FHIR resource JSON in syntax-highlighted `<pre>` block:
+  - Keys: teal (#17b3b3)
+  - Strings: #22863a
+  - Numbers: #005cc5
+  - Booleans/null: #e36209
+- Prev/Next navigation controls + "← {n} of {total} →" indicator
+- Copy button: copies displayed JSON to clipboard; shows "Copied!" for 1.5s then reverts
+
+---
+
+### Story 4.3: NDJSON Download
+
+As a tester, I want to download all retrieved FHIR resources as a single NDJSON file, so that I can share the payload or run offline validation.
+
+**Acceptance Criteria:**
+
+- Clicking "Download NDJSON": `ResultsModule` serializes all resources from all 8 resource types — one JSON object per line — into a single NDJSON blob
+- Filename: `{payerName}_{memberLastName}-{memberFirstName}_{YYYY-MM-DD}.ndjson` (spaces → `-`)
+- Date in filename is the date the exchange was run
+- Zero-count resource types contribute zero lines to the NDJSON file (no empty lines)
+
+---
+
+### Story 4.4: Debug Panel
+
+As a tester, I want to show or hide a debug panel that logs each Exchange step's HTTP traffic, so that I can diagnose server-side errors and verify request/response details.
+
+**Acceptance Criteria:**
+
+- Debug panel toggle in Exchange view: dark strip expands from 40px to 280px at bottom with 150ms CSS transition; background `#263238`/`#1e272e`, text `#aed581`
+- `ExchangeModule` calls `DebugModule.appendEntry({ step, request: { url, headers, body }, response: { status, headers, body } })` after each step (AD-13)
+- `DebugModule` redacts client secret values before storing: first 4 chars visible + `****` for remainder (NFR-7)
+- Panel expanded: each entry shows `METHOD URL` + HTTP status; clicking an entry expands to show full request/response detail
+- Entry count badge in panel header shows total number of logged entries
+- `access_token` values NOT logged to browser console (NFR-6)
+- Debug entries append-only within session; not persisted to `localStorage` (AD-3)</script>
+<script type="text/plain" id="html-mockup-payers"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P2P Exchange Tester — Old Payers</title>
+<style>
+:root {
+  --p:#17b3b3; --p-dk:#0f8a8a; --p-lt:#e8f7f7; --p-sf:#f0fbfb;
+  --bg:#f0f5f9; --sf:#ffffff; --bd:#dde5ec; --bd2:#b8ccd8;
+  --t1:#1a2e3b; --t2:#6b7d8d; --td:#a0b4c0;
+  --ok:#22c55e; --ok-b:#f0fdf4; --ok-t:#15803d;
+  --er:#ef4444; --er-b:#fef2f2; --er-t:#991b1b;
+  --pn:#94a3b8; --pn-b:#f8fafc; --pn-t:#475569;
+  --ff:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --fm:'Cascadia Code','Fira Code','Consolas',monospace;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0d1b26;--sf:#162231;--bd:#243546;--bd2:#2e4560;
+  --t1:#e2e8f0;--t2:#8fa3b3;--td:#3a5168;
+  --p-lt:#0a2e2e;--p-sf:#061f1f;
+}}
+:root[data-theme=dark]{--bg:#0d1b26;--sf:#162231;--bd:#243546;--bd2:#2e4560;--t1:#e2e8f0;--t2:#8fa3b3;--td:#3a5168;--p-lt:#0a2e2e;--p-sf:#061f1f;}
+:root[data-theme=light]{--bg:#f0f5f9;--sf:#ffffff;--bd:#dde5ec;--bd2:#b8ccd8;--t1:#1a2e3b;--t2:#6b7d8d;--td:#a0b4c0;--p-lt:#e8f7f7;--p-sf:#f0fbfb;}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0}
+body{font-family:var(--ff);font-size:14px;background:var(--bg);color:var(--t1)}
+button{font-family:var(--ff);cursor:pointer;border:none;background:none}
+.shell{display:grid;grid-template-rows:56px 1fr;grid-template-columns:220px 1fr;height:100vh;overflow:hidden}
+.hdr{grid-column:1/-1;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;gap:10px;z-index:20}
+.hdr-brand{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.logo-mark{display:grid;grid-template-columns:1fr 1fr;gap:2.5px;width:24px;height:24px}
+.logo-mark span{border-radius:2px;background:var(--p)}
+.logo-mark span:nth-child(2){background:var(--p-dk)}
+.logo-mark span:nth-child(3){background:var(--p-dk)}
+.logo-mark span:nth-child(4){background:var(--p);opacity:.5}
+.hdr-title{font-size:.9375rem;font-weight:700;color:var(--p);letter-spacing:-.01em;white-space:nowrap}
+.env-pill{font-size:.6rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:var(--pn-b);color:var(--pn-t);border-radius:9999px;padding:2px 7px}
+.hdr-r{display:flex;align-items:center;gap:6px}
+.np-chip{font-size:.75rem;font-weight:600;color:var(--p-dk);background:var(--p-lt);border-radius:9999px;padding:4px 12px;white-space:nowrap}
+.np-label{font-size:.65rem;font-weight:400;color:var(--p);margin-right:4px}
+.icn-btn{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:background 120ms,color 120ms}
+.icn-btn:hover{background:var(--bg);color:var(--t1)}
+.icn-btn:focus-visible{outline:2px solid var(--p);outline-offset:2px}
+.sidebar{background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+.nav{flex:1;padding:10px 8px 0;display:flex;flex-direction:column;gap:2px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;font-size:.875rem;font-weight:500;color:var(--t2);cursor:pointer;transition:background 120ms,color 120ms;border-left:3px solid transparent;text-decoration:none}
+.nav-item:hover{background:var(--bg);color:var(--t1)}
+.nav-item.active{background:var(--p-lt);color:var(--p);font-weight:600;border-left-color:var(--p)}
+.nav-item.dim{opacity:.4;pointer-events:none}
+.nav-item:focus-visible{outline:2px solid var(--p);outline-offset:-2px}
+.nav-ico{width:16px;height:16px;flex-shrink:0}
+.sidebar-foot{padding:8px;border-top:1px solid var(--bd)}
+.collapse-btn{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:8px;font-size:.8125rem;color:var(--t2);transition:background 120ms}
+.collapse-btn:hover{background:var(--bg);color:var(--t1)}
+.main{overflow-y:auto;padding:28px}
+.pg-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;gap:16px}
+.pg-title{font-size:1.375rem;font-weight:700;letter-spacing:-.02em;color:var(--t1)}
+.pg-sub{font-size:.8125rem;color:var(--t2);margin-top:4px}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--ff);font-size:.8125rem;font-weight:600;border-radius:5px;padding:8px 16px;cursor:pointer;transition:background 120ms;border:none;white-space:nowrap}
+.btn:focus-visible{outline:2px solid var(--p);outline-offset:2px}
+.btn-p{background:var(--p);color:#fff}.btn-p:hover{background:var(--p-dk)}
+.btn-s{background:var(--sf);color:var(--t1);border:1px solid var(--bd)}.btn-s:hover{background:var(--bg)}
+.btn-sm{font-size:.75rem;padding:6px 12px}
+.payer-list{display:flex;flex-direction:column;gap:10px}
+.pcard{background:var(--sf);border:1px solid var(--bd);border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:box-shadow 150ms}
+.pcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.pcard.open{border-color:var(--bd2)}
+.ph{display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;user-select:none}
+.ph:hover{background:var(--p-sf)}
+.chevron{color:var(--td);font-size:14px;transition:transform 200ms;flex-shrink:0;line-height:1;margin-right:2px}
+.open .chevron{transform:rotate(90deg)}
+.pi{flex:1;min-width:0}
+.pn{font-size:.9375rem;font-weight:700;color:var(--t1)}
+.pu{font-size:.7rem;font-family:var(--fm);color:var(--t2);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:380px}
+.pm{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.badge{font-size:.65rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:9999px;padding:3px 8px}
+.bn{background:var(--pn-b);color:var(--pn-t)}
+.bt{background:var(--p-lt);color:var(--p-dk)}
+.mct{font-size:.75rem;color:var(--t2);white-space:nowrap}
+.acts{display:flex;gap:2px}
+.ia{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:background 120ms,color 120ms;cursor:pointer;border:none;background:none}
+.ia:hover{background:var(--bg);color:var(--t1)}
+.ia.del:hover{background:var(--er-b);color:var(--er)}
+.pbody{border-top:1px solid var(--bd);display:none}
+.open .pbody{display:block}
+.tabs{display:flex;border-bottom:1px solid var(--bd);padding:0 16px}
+.tab{font-size:.8125rem;font-weight:600;padding:9px 12px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer}
+.tab.on{color:var(--p);border-bottom-color:var(--p)}
+.roster{padding:12px 16px 16px}
+.rtbl{width:100%;border-collapse:collapse}
+.rtbl th{text-align:left;font-size:.65rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t2);padding:5px 8px;border-bottom:1px solid var(--bd)}
+.rtbl td{padding:9px 8px;border-bottom:1px solid var(--bd);font-size:.8125rem;vertical-align:middle}
+.rtbl tr:last-child td{border-bottom:none}
+.rtbl tbody tr:hover td{background:var(--bg)}
+.mid{font-family:var(--fm);font-size:.7rem;color:var(--t2)}
+.rf{display:flex;justify-content:flex-end;padding-top:10px}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="logo-mark"><span></span><span></span><span></span><span></span></div>
+    <span class="hdr-title">P2P Exchange Tester</span>
+    <span class="env-pill">UAT</span>
+  </div>
+  <div class="hdr-r">
+    <span class="np-chip"><span class="np-label">New Payer:</span>Acme Health Plan</span>
+    <button class="icn-btn" title="Settings" aria-label="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+<nav class="sidebar" aria-label="Main navigation">
+  <div class="nav">
+    <a class="nav-item active" aria-current="page" href="#">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Previous Payers
+    </a>
+    <a class="nav-item" href="#">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      Exchange
+    </a>
+    <a class="nav-item dim" href="#" aria-disabled="true" title="Run an exchange to see results">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Results
+    </a>
+  </div>
+  <div class="sidebar-foot">
+    <button class="collapse-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Collapse
+    </button>
+  </div>
+</nav>
+<main class="main">
+  <div class="pg-hdr">
+    <div>
+      <h1 class="pg-title">Previous Payers</h1>
+      <p class="pg-sub">Manage Previous Payer connections and member rosters</p>
+    </div>
+    <button class="btn btn-p">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Previous Payer
+    </button>
+  </div>
+  <div class="payer-list">
+    <div class="pcard">
+      <div class="ph" role="button" tabindex="0" aria-expanded="false">
+        <span class="chevron">›</span>
+        <div class="pi">
+          <div class="pn">HealthInteractive UAT</div>
+          <div class="pu">https://fhir.platform.uat.mt.healthinteractive.net/r4</div>
+        </div>
+        <div class="pm">
+          <span class="badge bn">client_secret_post</span>
+          <span class="badge bt">CORS proxy</span>
+          <span class="mct">4 members</span>
+          <div class="acts">
+            <button class="ia" title="Edit" aria-label="Edit HealthInteractive UAT"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+            <button class="ia del" title="Delete" aria-label="Delete HealthInteractive UAT"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="pcard open">
+      <div class="ph" role="button" tabindex="0" aria-expanded="true">
+        <span class="chevron">›</span>
+        <div class="pi">
+          <div class="pn">Connectathon Demo Payer</div>
+          <div class="pu">https://fhir.deloitte.connectathons.com/fhir/r4</div>
+        </div>
+        <div class="pm">
+          <span class="badge bn">client_secret_basic</span>
+          <span class="mct">3 members</span>
+          <div class="acts">
+            <button class="ia" title="Edit" aria-label="Edit Connectathon Demo Payer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+            <button class="ia del" title="Delete" aria-label="Delete Connectathon Demo Payer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>
+          </div>
+        </div>
+      </div>
+      <div class="pbody">
+        <div class="tabs">
+          <div class="tab">Config</div>
+          <div class="tab on">Roster</div>
+        </div>
+        <div class="roster">
+          <table class="rtbl">
+            <thead><tr>
+              <th>Name</th><th>Date of Birth</th><th>Gender</th><th>Member ID at Previous Payer</th><th></th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td>Jane Smith</td><td>1980-03-15</td><td>F</td>
+                <td class="mid">CTH-MBR-0042</td>
+                <td><div class="acts">
+                  <button class="ia" aria-label="Edit Jane Smith"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="ia del" aria-label="Remove Jane Smith"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+                </div></td>
+              </tr>
+              <tr>
+                <td>Robert Chen</td><td>1965-11-02</td><td>M</td>
+                <td class="mid">CTH-MBR-0107</td>
+                <td><div class="acts">
+                  <button class="ia" aria-label="Edit Robert Chen"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="ia del" aria-label="Remove Robert Chen"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+                </div></td>
+              </tr>
+              <tr>
+                <td>Maria Gonzalez</td><td>1992-07-28</td><td>F</td>
+                <td class="mid">CTH-MBR-0213</td>
+                <td><div class="acts">
+                  <button class="ia" aria-label="Edit Maria Gonzalez"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="ia del" aria-label="Remove Maria Gonzalez"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+                </div></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="rf">
+            <button class="btn btn-s btn-sm">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Member
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+</body>
+</html></script>
+<script type="text/plain" id="html-mockup-exchange"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P2P Exchange Tester — Exchange</title>
+<style>
+:root {
+  --p:#17b3b3;--p-dk:#0f8a8a;--p-lt:#e8f7f7;--p-sf:#f0fbfb;
+  --bg:#f0f5f9;--sf:#ffffff;--bd:#dde5ec;--bd2:#b8ccd8;
+  --t1:#1a2e3b;--t2:#6b7d8d;--td:#a0b4c0;
+  --ok:#22c55e;--ok-b:#f0fdf4;--ok-t:#15803d;
+  --er:#ef4444;--er-b:#fef2f2;--er-t:#991b1b;
+  --pn:#94a3b8;--pn-b:#f8fafc;--pn-t:#475569;
+  --pr:#3b82f6;--pr-b:#eff6ff;--pr-t:#1d4ed8;
+  --dbg:#1e272e;--dbg2:#263238;--dgt:#aed581;
+  --ff:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --fm:'Cascadia Code','Fira Code','Consolas',monospace;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0d1b26;--sf:#162231;--bd:#243546;--bd2:#2e4560;
+  --t1:#e2e8f0;--t2:#8fa3b3;--td:#3a5168;
+  --p-lt:#0a2e2e;--p-sf:#061f1f;
+}}
+:root[data-theme=dark]{--bg:#0d1b26;--sf:#162231;--bd:#243546;--bd2:#2e4560;--t1:#e2e8f0;--t2:#8fa3b3;--td:#3a5168;--p-lt:#0a2e2e;--p-sf:#061f1f;}
+:root[data-theme=light]{--bg:#f0f5f9;--sf:#ffffff;--bd:#dde5ec;--bd2:#b8ccd8;--t1:#1a2e3b;--t2:#6b7d8d;--td:#a0b4c0;--p-lt:#e8f7f7;--p-sf:#f0fbfb;}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0}
+body{font-family:var(--ff);font-size:14px;background:var(--bg);color:var(--t1)}
+button{font-family:var(--ff);cursor:pointer;border:none;background:none}
+.shell{display:grid;grid-template-rows:56px 1fr;grid-template-columns:220px 1fr;height:100vh;overflow:hidden}
+.hdr{grid-column:1/-1;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;gap:10px;z-index:20}
+.hdr-brand{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.logo-mark{display:grid;grid-template-columns:1fr 1fr;gap:2.5px;width:24px;height:24px}
+.logo-mark span{border-radius:2px;background:var(--p)}
+.logo-mark span:nth-child(2){background:var(--p-dk)}
+.logo-mark span:nth-child(3){background:var(--p-dk)}
+.logo-mark span:nth-child(4){background:var(--p);opacity:.5}
+.hdr-title{font-size:.9375rem;font-weight:700;color:var(--p);letter-spacing:-.01em;white-space:nowrap}
+.env-pill{font-size:.6rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:var(--pn-b);color:var(--pn-t);border-radius:9999px;padding:2px 7px}
+.hdr-r{display:flex;align-items:center;gap:6px}
+.np-chip{font-size:.75rem;font-weight:600;color:var(--p-dk);background:var(--p-lt);border-radius:9999px;padding:4px 12px;white-space:nowrap}
+.np-label{font-size:.65rem;font-weight:400;color:var(--p);margin-right:4px}
+.icn-btn{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:background 120ms,color 120ms}
+.icn-btn:hover{background:var(--bg);color:var(--t1)}
+.sidebar{background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+.nav{flex:1;padding:10px 8px 0;display:flex;flex-direction:column;gap:2px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;font-size:.875rem;font-weight:500;color:var(--t2);cursor:pointer;transition:background 120ms,color 120ms;border-left:3px solid transparent;text-decoration:none}
+.nav-item:hover{background:var(--bg);color:var(--t1)}
+.nav-item.active{background:var(--p-lt);color:var(--p);font-weight:600;border-left-color:var(--p)}
+.nav-item.dim{opacity:.4;pointer-events:none}
+.nav-ico{width:16px;height:16px;flex-shrink:0}
+.sidebar-foot{padding:8px;border-top:1px solid var(--bd)}
+.collapse-btn{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:8px;font-size:.8125rem;color:var(--t2);transition:background 120ms}
+.collapse-btn:hover{background:var(--bg);color:var(--t1)}
+.main-col{display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.main{flex:1;overflow-y:auto;padding:28px 28px 20px}
+.pg-hdr{margin-bottom:24px}
+.pg-title{font-size:1.375rem;font-weight:700;letter-spacing:-.02em;color:var(--t1)}
+.pg-sub{font-size:.8125rem;color:var(--t2);margin-top:4px}
+.ctx-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;background:var(--sf);border:1px solid var(--bd);border-radius:10px;margin-bottom:24px}
+.ctx-ico{width:32px;height:32px;border-radius:8px;background:var(--p-lt);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ctx-body{flex:1;min-width:0}
+.ctx-label{font-size:.7rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--t2)}
+.ctx-value{font-size:.875rem;font-weight:600;color:var(--t1);margin-top:1px}
+.ctx-sep{width:1px;height:28px;background:var(--bd);flex-shrink:0}
+.steps-card{background:var(--sf);border:1px solid var(--bd);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.steps-head{padding:14px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
+.steps-title{font-size:.875rem;font-weight:700;color:var(--t1);letter-spacing:-.01em}
+.steps-meta{font-size:.75rem;color:var(--t2)}
+.steps-body{padding:20px 20px 8px}
+.step{display:flex;gap:14px;position:relative}
+.step:not(:last-child){padding-bottom:4px}
+.step-l{display:flex;flex-direction:column;align-items:center;width:28px;flex-shrink:0;padding-top:4px}
+.si{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:700}
+.si-ok{background:var(--p);color:#fff}
+.si-pend{border:2px dashed var(--bd2);background:var(--bg)}
+.si-active{background:transparent;border:none;position:relative}
+.step:not(:last-child) .step-l::after{content:'';width:2px;background:var(--bd);flex:1;margin:4px 0 0;min-height:24px}
+.step.is-ok .step-l::after{background:var(--p-lt)}
+.step-r{flex:1;min-width:0;padding-bottom:20px}
+.step:last-child .step-r{padding-bottom:12px}
+.step-hdr{display:flex;align-items:center;gap:8px;padding-top:4px;min-height:28px}
+.step-name{font-size:.9375rem;font-weight:700;color:var(--t1);flex-shrink:0}
+.step-dot{font-size:12px;color:var(--td)}
+.step-status{font-size:.8125rem;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.st-ok{color:var(--ok-t)}
+.st-pr{color:var(--pr-t)}
+.st-pn{color:var(--td)}
+.step-elapsed{font-size:.75rem;color:var(--t2);white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}
+.step-toggle{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:11px;transition:background 120ms;flex-shrink:0}
+.step-toggle:hover{background:var(--bg);color:var(--t1)}
+.step-detail{margin-top:8px;background:var(--p-lt);border-radius:8px;padding:10px 14px;font-size:.8125rem}
+.dr{display:flex;gap:10px;margin-bottom:5px;align-items:baseline}
+.dr:last-child{margin-bottom:0}
+.dk{font-size:.7rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--t2);min-width:72px;flex-shrink:0}
+.dv{font-family:var(--fm);font-size:.7rem;color:var(--t1);word-break:break-all}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner{width:22px;height:22px;border:2.5px solid var(--p-lt);border-top-color:var(--p);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.pulse-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pr);margin-right:5px;vertical-align:middle;animation:pulse 1.4s ease-in-out infinite}
+.debug-strip{flex-shrink:0;background:var(--dbg);border-top:1px solid #0a1520}
+.dbg-bar{display:flex;align-items:center;gap:10px;padding:0 16px;height:40px;cursor:pointer;user-select:none}
+.dbg-arrow{font-size:10px;color:var(--dgt);transition:transform 200ms}
+.dbg-label{font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dgt);font-family:var(--fm)}
+.dbg-count{font-size:.65rem;background:rgba(174,213,129,.15);color:var(--dgt);border-radius:9999px;padding:1px 7px;font-family:var(--fm)}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="logo-mark"><span></span><span></span><span></span><span></span></div>
+    <span class="hdr-title">P2P Exchange Tester</span>
+    <span class="env-pill">UAT</span>
+  </div>
+  <div class="hdr-r">
+    <span class="np-chip"><span class="np-label">New Payer:</span>Acme Health Plan</span>
+    <button class="icn-btn" title="Settings" aria-label="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+<nav class="sidebar" aria-label="Main navigation">
+  <div class="nav">
+    <a class="nav-item" href="#">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Previous Payers
+    </a>
+    <a class="nav-item active" aria-current="page" href="#">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      Exchange
+    </a>
+    <a class="nav-item dim" href="#" aria-disabled="true">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Results
+    </a>
+  </div>
+  <div class="sidebar-foot">
+    <button class="collapse-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Collapse
+    </button>
+  </div>
+</nav>
+<div class="main-col">
+  <main class="main">
+    <div class="pg-hdr">
+      <h1 class="pg-title">Exchange</h1>
+      <p class="pg-sub">Run a Payer-to-Payer data exchange for a single member</p>
+    </div>
+    <div class="ctx-bar">
+      <div class="ctx-ico">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--p)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </div>
+      <div class="ctx-body">
+        <div class="ctx-label">Previous Payer</div>
+        <div class="ctx-value">Connectathon Demo Payer</div>
+      </div>
+      <div class="ctx-sep"></div>
+      <div class="ctx-body">
+        <div class="ctx-label">Member</div>
+        <div class="ctx-value">Jane Smith &nbsp;<span style="font-weight:400;color:var(--t2);font-size:.8125rem">DOB 1980-03-15 · CTH-MBR-0042</span></div>
+      </div>
+    </div>
+    <div class="steps-card">
+      <div class="steps-head">
+        <span class="steps-title">Exchange Progress</span>
+        <span class="steps-meta"><span class="pulse-dot"></span>Running — step 2 of 4</span>
+      </div>
+      <div class="steps-body">
+        <div class="step is-ok">
+          <div class="step-l">
+            <div class="si si-ok">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+          <div class="step-r">
+            <div class="step-hdr">
+              <span class="step-name">Token</span>
+              <span class="step-dot">·</span>
+              <span class="step-status st-ok">Access token acquired — expires in 247s</span>
+              <span class="step-elapsed">0.8s</span>
+              <button class="step-toggle" aria-label="Collapse Token details">▾</button>
+            </div>
+            <div class="step-detail">
+              <div class="dr"><span class="dk">Type</span><span class="dv">Bearer</span></div>
+              <div class="dr"><span class="dk">Scope</span><span class="dv">system/*.rs</span></div>
+              <div class="dr"><span class="dk">Expires</span><span class="dv">247s (3600s total)</span></div>
+              <div class="dr"><span class="dk">Endpoint</span><span class="dv">https://auth.deloitte.connectathons.com/realms/p2p/protocol/openid-connect/token</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="step is-active">
+          <div class="step-l">
+            <div class="si si-active"><div class="spinner"></div></div>
+          </div>
+          <div class="step-r">
+            <div class="step-hdr">
+              <span class="step-name">Member Match</span>
+              <span class="step-dot">·</span>
+              <span class="step-status st-pr"><span class="pulse-dot"></span>Sending $member-match request…</span>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-l">
+            <div class="si si-pend"></div>
+          </div>
+          <div class="step-r">
+            <div class="step-hdr">
+              <span class="step-name" style="color:var(--t2)">Member-Scoped Token</span>
+              <span class="step-dot">·</span>
+              <span class="step-status st-pn">Waiting</span>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-l">
+            <div class="si si-pend"></div>
+          </div>
+          <div class="step-r">
+            <div class="step-hdr">
+              <span class="step-name" style="color:var(--t2)">Data Retrieval</span>
+              <span class="step-dot">·</span>
+              <span class="step-status st-pn">Waiting</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div class="debug-strip">
+    <div class="dbg-bar" role="button" aria-expanded="false" aria-label="Toggle debug panel">
+      <span class="dbg-arrow">▶</span>
+      <span class="dbg-label">Debug Panel</span>
+      <span class="dbg-count">1 entry</span>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html></script>
+<script type="text/plain" id="html-mockup-results"><!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>P2P Exchange Tester — Results</title>
+<style>
+:root {
+  --p:#17b3b3;--p-dk:#0f8a8a;--p-lt:#e8f7f7;--p-sf:#f0fbfb;
+  --bg:#f0f5f9;--sf:#ffffff;--bd:#dde5ec;--bd2:#b8ccd8;
+  --t1:#1a2e3b;--t2:#6b7d8d;--td:#a0b4c0;
+  --ok:#22c55e;--ok-b:#f0fdf4;--ok-t:#15803d;
+  --pn:#94a3b8;--pn-b:#f8fafc;--pn-t:#475569;
+  --ff:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --fm:'Cascadia Code','Fira Code','Consolas',monospace;
+}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0d1b26;--sf:#162231;--bd:#243546;--bd2:#2e4560;
+  --t1:#e2e8f0;--t2:#8fa3b3;--td:#3a5168;
+  --p-lt:#0a2e2e;--p-sf:#061f1f;
+  --ok-b:#052e16;
+}}
+:root[data-theme=dark]{--bg:#0d1b26;--sf:#162231;--bd:#243546;--bd2:#2e4560;--t1:#e2e8f0;--t2:#8fa3b3;--td:#3a5168;--p-lt:#0a2e2e;--p-sf:#061f1f;--ok-b:#052e16;}
+:root[data-theme=light]{--bg:#f0f5f9;--sf:#ffffff;--bd:#dde5ec;--bd2:#b8ccd8;--t1:#1a2e3b;--t2:#6b7d8d;--td:#a0b4c0;--p-lt:#e8f7f7;--p-sf:#f0fbfb;--ok-b:#f0fdf4;}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%;margin:0;padding:0}
+body{font-family:var(--ff);font-size:14px;background:var(--bg);color:var(--t1)}
+button{font-family:var(--ff);cursor:pointer;border:none;background:none}
+.shell{display:grid;grid-template-rows:56px 1fr;grid-template-columns:220px 1fr;height:100vh;overflow:hidden}
+.hdr{grid-column:1/-1;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;padding:0 20px;gap:10px;z-index:20}
+.hdr-brand{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+.logo-mark{display:grid;grid-template-columns:1fr 1fr;gap:2.5px;width:24px;height:24px}
+.logo-mark span{border-radius:2px;background:var(--p)}
+.logo-mark span:nth-child(2){background:var(--p-dk)}
+.logo-mark span:nth-child(3){background:var(--p-dk)}
+.logo-mark span:nth-child(4){background:var(--p);opacity:.5}
+.hdr-title{font-size:.9375rem;font-weight:700;color:var(--p);letter-spacing:-.01em;white-space:nowrap}
+.env-pill{font-size:.6rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;background:var(--pn-b);color:var(--pn-t);border-radius:9999px;padding:2px 7px}
+.hdr-r{display:flex;align-items:center;gap:6px}
+.np-chip{font-size:.75rem;font-weight:600;color:var(--p-dk);background:var(--p-lt);border-radius:9999px;padding:4px 12px;white-space:nowrap}
+.np-label{font-size:.65rem;font-weight:400;color:var(--p);margin-right:4px}
+.icn-btn{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--t2);transition:background 120ms,color 120ms}
+.icn-btn:hover{background:var(--bg);color:var(--t1)}
+.sidebar{background:var(--sf);border-right:1px solid var(--bd);display:flex;flex-direction:column}
+.nav{flex:1;padding:10px 8px 0;display:flex;flex-direction:column;gap:2px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;font-size:.875rem;font-weight:500;color:var(--t2);cursor:pointer;transition:background 120ms,color 120ms;border-left:3px solid transparent;text-decoration:none}
+.nav-item:hover{background:var(--bg);color:var(--t1)}
+.nav-item.active{background:var(--p-lt);color:var(--p);font-weight:600;border-left-color:var(--p)}
+.nav-ico{width:16px;height:16px;flex-shrink:0}
+.sidebar-foot{padding:8px;border-top:1px solid var(--bd)}
+.collapse-btn{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border-radius:8px;font-size:.8125rem;color:var(--t2)}
+.main{overflow-y:auto;padding:28px}
+.pg-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:22px;gap:16px}
+.pg-title{font-size:1.375rem;font-weight:700;letter-spacing:-.02em}
+.pg-sub{font-size:.8125rem;color:var(--t2);margin-top:4px}
+.pg-actions{display:flex;gap:8px;flex-shrink:0}
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:var(--ff);font-size:.8125rem;font-weight:600;border-radius:5px;padding:8px 14px;cursor:pointer;transition:background 120ms;border:none;white-space:nowrap}
+.btn-p{background:var(--p);color:#fff}.btn-p:hover{background:var(--p-dk)}
+.btn-s{background:var(--sf);color:var(--t1);border:1px solid var(--bd)}.btn-s:hover{background:var(--bg)}
+.done-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--ok-b);border:1px solid #bbf7d0;border-radius:10px;margin-bottom:22px}
+.done-ico{width:28px;height:28px;border-radius:50%;background:var(--ok);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.done-text{font-size:.875rem;font-weight:600;color:var(--ok-t)}
+.done-meta{font-size:.8125rem;color:var(--ok-t);opacity:.8;margin-left:auto}
+.stat-row{display:flex;gap:10px;margin-bottom:22px;overflow-x:auto;padding-bottom:4px}
+.stat-card{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px 16px;min-width:130px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.stat-card:hover{box-shadow:0 2px 6px rgba(0,0,0,.08);cursor:pointer}
+.stat-card.active{border-color:var(--p);box-shadow:0 0 0 2px var(--p-lt)}
+.sc-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.sc-ico{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;font-weight:700}
+.sc-name{font-size:.7rem;font-weight:700;letter-spacing:.03em;color:var(--t2);line-height:1.2}
+.sc-count{font-size:1.375rem;font-weight:700;color:var(--t1);letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+.sc-count.zero{color:var(--td)}
+.explorer{background:var(--sf);border:1px solid var(--bd);border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.ex-tabs{display:flex;border-bottom:1px solid var(--bd);padding:0 16px;overflow-x:auto}
+.ex-tab{font-size:.8125rem;font-weight:600;padding:9px 12px;color:var(--t2);border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.ex-tab.on{color:var(--p);border-bottom-color:var(--p)}
+.ex-tab.off{opacity:.45;pointer-events:none}
+.ex-body{display:grid;grid-template-columns:260px 1fr;min-height:380px}
+.ex-list{border-right:1px solid var(--bd);overflow-y:auto}
+.ex-list-head{padding:10px 14px;border-bottom:1px solid var(--bd);font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t2);display:flex;justify-content:space-between;align-items:center}
+.ex-item{padding:10px 14px;border-bottom:1px solid var(--bd);cursor:pointer;transition:background 120ms}
+.ex-item:hover{background:var(--p-sf)}
+.ex-item.on{background:var(--p-lt)}
+.ex-item:last-child{border-bottom:none}
+.ei-id{font-family:var(--fm);font-size:.7rem;color:var(--p-dk);font-weight:600}
+.ei-meta{font-size:.75rem;color:var(--t2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ex-json{padding:16px;overflow:auto;position:relative}
+.json-nav{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.json-nav-btn{font-size:.8125rem;font-weight:600;padding:5px 10px;border-radius:5px;border:1px solid var(--bd);background:var(--sf);color:var(--t1);cursor:pointer}
+.json-nav-btn:hover{background:var(--bg)}
+.json-pos{font-size:.75rem;color:var(--t2);flex:1;text-align:center}
+.copy-btn{font-size:.75rem;padding:5px 10px;border-radius:5px;border:1px solid var(--bd);background:var(--sf);color:var(--t2);cursor:pointer;display:flex;align-items:center;gap:5px}
+.copy-btn:hover{color:var(--t1);background:var(--bg)}
+.json-block{background:#f8fafb;border:1px solid var(--bd);border-radius:8px;padding:14px;overflow-x:auto;font-family:var(--fm);font-size:.75rem;line-height:1.6;margin:0;white-space:pre}
+.jk{color:var(--p-dk)}
+.js{color:#22863a}
+.jn{color:#005cc5}
+.jb{color:#e36209}
+.jx{color:#6a737d}
+@media(prefers-color-scheme:dark){.json-block{background:#111b27}.js{color:#7ee787}.jn{color:#79c0ff}.jb{color:#ffa657}.jk{color:#56d8d8}}
+</style>
+</head>
+<body>
+<div class="shell">
+<header class="hdr">
+  <div class="hdr-brand">
+    <div class="logo-mark"><span></span><span></span><span></span><span></span></div>
+    <span class="hdr-title">P2P Exchange Tester</span>
+    <span class="env-pill">UAT</span>
+  </div>
+  <div class="hdr-r">
+    <span class="np-chip"><span class="np-label">New Payer:</span>Acme Health Plan</span>
+    <button class="icn-btn" title="Settings" aria-label="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+</header>
+<nav class="sidebar" aria-label="Main navigation">
+  <div class="nav">
+    <a class="nav-item" href="#">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Previous Payers
+    </a>
+    <a class="nav-item" href="#">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      Exchange
+    </a>
+    <a class="nav-item active" aria-current="page" href="#">
+      <svg class="nav-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Results
+    </a>
+  </div>
+  <div class="sidebar-foot">
+    <button class="collapse-btn">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Collapse
+    </button>
+  </div>
+</nav>
+<main class="main">
+  <div class="pg-hdr">
+    <div>
+      <h1 class="pg-title">Results</h1>
+      <p class="pg-sub">Connectathon Demo Payer · Jane Smith · 2026-07-29 11:34</p>
+    </div>
+    <div class="pg-actions">
+      <button class="btn btn-s">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        New Exchange
+      </button>
+      <button class="btn btn-p">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download NDJSON
+      </button>
+    </div>
+  </div>
+  <div class="done-bar">
+    <div class="done-ico">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <span class="done-text">Exchange complete — 41 resources retrieved across 7 resource types</span>
+    <span class="done-meta">Total time: 3.2s</span>
+  </div>
+  <div class="stat-row" role="list">
+    <div class="stat-card active" role="listitem" tabindex="0">
+      <div class="sc-head">
+        <div class="sc-ico" style="background:#e0f7fa;color:#0f8a8a">EOB</div>
+        <div class="sc-name">Explanation<br>of Benefit</div>
+      </div>
+      <div class="sc-count">12</div>
+    </div>
+    <div class="stat-card" role="listitem" tabindex="0">
+      <div class="sc-head">
+        <div class="sc-ico" style="background:#fce4ec;color:#c62828">Cnd</div>
+        <div class="sc-name">Condition</div>
+      </div>
+      <div class="sc-count">4</div>
+    </div>
+    <div class="stat-card" role="listitem" tabindex="0">
+      <div class="sc-head">
+        <div class="sc-ico" style="background:#e8f5e9;color:#2e7d32">MRx</div>
+        <div class="sc-name">Medication<br>Request</div>
+      </div>
+      <div class="sc-count">3</div>
+    </div>
+    <div class="stat-card" role="listitem" tabindex="0">
+      <div class="sc-head">
+        <div class="sc-ico" style="background:#f3e5f5;color:#6a1b9a">MDs</div>
+        <div class="sc-name">Medication<br>Dispense</div>
+      </div>
+      <div class="sc-count zero">0</div>
+    </div>
+    <div class="stat-card" role="listitem" tabindex="0">
+      <div class="sc-head">
+        <div class="sc-ico" style="background:#e3f2fd;color:#1565c0">Obs</div>
+        <div class="sc-name">Observation</div>
+      </div>
+      <div class="sc-count">8</div>
+    </div>
+    <div class="stat-card" role="listitem" tabindex="0">
+      <div class="sc-head">
+        <div class="sc-ico" style="background:#fff8e1;color:#e65100">Alg</div>
+        <div class="sc-name">Allergy<br>Intolerance</div>
+      </div>
+      <div class="sc-count">2</div>
+    </div>
+    <div class="stat-card" role="listitem" tabindex="0">
+      <div class="sc-head">
+        <div class="sc-ico" style="background:#e8eaf6;color:#283593">Imm</div>
+        <div class="sc-name">Immunization</div>
+      </div>
+      <div class="sc-count">5</div>
+    </div>
+    <div class="stat-card" role="listitem" tabindex="0">
+      <div class="sc-head">
+        <div class="sc-ico" style="background:#f1f8e9;color:#558b2f">Prv</div>
+        <div class="sc-name">Provenance</div>
+      </div>
+      <div class="sc-count">7</div>
+    </div>
+  </div>
+  <div class="explorer">
+    <div class="ex-tabs" role="tablist">
+      <div class="ex-tab on" role="tab" aria-selected="true">ExplanationOfBenefit</div>
+      <div class="ex-tab" role="tab">Condition</div>
+      <div class="ex-tab" role="tab">MedicationRequest</div>
+      <div class="ex-tab off" role="tab" aria-disabled="true">MedicationDispense</div>
+      <div class="ex-tab" role="tab">Observation</div>
+      <div class="ex-tab" role="tab">AllergyIntolerance</div>
+      <div class="ex-tab" role="tab">Immunization</div>
+      <div class="ex-tab" role="tab">Provenance</div>
+    </div>
+    <div class="ex-body">
+      <div class="ex-list" role="listbox" aria-label="ExplanationOfBenefit resources">
+        <div class="ex-list-head"><span>12 resources</span></div>
+        <div class="ex-item on" role="option" aria-selected="true">
+          <div class="ei-id">EOB/cth-eob-00142</div>
+          <div class="ei-meta">Inpatient · 2024-11-12</div>
+        </div>
+        <div class="ex-item" role="option">
+          <div class="ei-id">EOB/cth-eob-00141</div>
+          <div class="ei-meta">Outpatient · 2024-09-03</div>
+        </div>
+        <div class="ex-item" role="option">
+          <div class="ei-id">EOB/cth-eob-00138</div>
+          <div class="ei-meta">Pharmacy · 2024-08-19</div>
+        </div>
+        <div class="ex-item" role="option">
+          <div class="ei-id">EOB/cth-eob-00133</div>
+          <div class="ei-meta">Outpatient · 2024-06-04</div>
+        </div>
+        <div class="ex-item" role="option">
+          <div class="ei-id">EOB/cth-eob-00129</div>
+          <div class="ei-meta">Outpatient · 2024-03-21</div>
+        </div>
+        <div class="ex-item" role="option">
+          <div class="ei-id">EOB/cth-eob-00124</div>
+          <div class="ei-meta">Inpatient · 2024-01-08</div>
+        </div>
+        <div class="ex-item" role="option">
+          <div class="ei-id">EOB/cth-eob-00119</div>
+          <div class="ei-meta">Pharmacy · 2023-12-02</div>
+        </div>
+      </div>
+      <div class="ex-json">
+        <div class="json-nav">
+          <button class="json-nav-btn">← Prev</button>
+          <span class="json-pos">1 of 12</span>
+          <button class="json-nav-btn">Next →</button>
+          <button class="copy-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy
+          </button>
+        </div>
+        <pre class="json-block">{
+  <span class="jk">"resourceType"</span>: <span class="js">"ExplanationOfBenefit"</span>,
+  <span class="jk">"id"</span>: <span class="js">"cth-eob-00142"</span>,
+  <span class="jk">"meta"</span>: {
+    <span class="jk">"lastUpdated"</span>: <span class="js">"2024-11-14T08:32:11Z"</span>,
+    <span class="jk">"profile"</span>: [
+      <span class="js">"http://hl7.org/fhir/us/carin-bb/StructureDefinition/C4BB-ExplanationOfBenefit-Inpatient-Institutional"</span>
+    ]
+  },
+  <span class="jk">"status"</span>: <span class="js">"active"</span>,
+  <span class="jk">"type"</span>: {
+    <span class="jk">"coding"</span>: [{
+      <span class="jk">"system"</span>: <span class="js">"http://terminology.hl7.org/CodeSystem/claim-type"</span>,
+      <span class="jk">"code"</span>: <span class="js">"institutional"</span>
+    }]
+  },
+  <span class="jk">"use"</span>: <span class="js">"claim"</span>,
+  <span class="jk">"patient"</span>: {
+    <span class="jk">"reference"</span>: <span class="js">"Patient/cth-pat-smith-jane"</span>
+  },
+  <span class="jk">"billablePeriod"</span>: {
+    <span class="jk">"start"</span>: <span class="js">"2024-11-10"</span>,
+    <span class="jk">"end"</span>: <span class="js">"2024-11-12"</span>
+  },
+  <span class="jk">"insurer"</span>: {
+    <span class="jk">"display"</span>: <span class="js">"Connectathon Demo Payer"</span>
+  },
+  <span class="jk">"total"</span>: [{
+    <span class="jk">"category"</span>: { <span class="jk">"coding"</span>: [{ <span class="jk">"code"</span>: <span class="js">"submitted"</span> }] },
+    <span class="jk">"amount"</span>: { <span class="jk">"value"</span>: <span class="jn">18420.00</span>, <span class="jk">"currency"</span>: <span class="js">"USD"</span> }
+  }]
+}</pre>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+</body>
+</html></script>
+
+<!-- ═══ JAVASCRIPT ════════════════════════════════════════════════════════ -->
+<script>
+/* ── MARKDOWN → HTML RENDERER ─────────────────────────────────────────── */
+function md2html(text) {
+  // Strip YAML frontmatter
+  text = text.replace(/^---\n[\s\S]*?\n---\s*\n?/, '');
+
+  // Protect fenced code blocks
+  var cbs = [];
+  text = text.replace(/```([\w-]*)\n?([\s\S]*?)```/g, function(_, lang, code) {
+    var i = cbs.length;
+    cbs.push({ lang: lang.trim(), code: code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') });
+    return '\x00CB' + i + '\x00';
+  });
+
+  // Protect inline code
+  var ics = [];
+  text = text.replace(/`([^`\n]+)`/g, function(_, code) {
+    var i = ics.length;
+    ics.push(code.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+    return '\x00IC' + i + '\x00';
+  });
+
+  // Tables
+  text = text.replace(/((?:[ \t]*\|[^\n]+\|\n)+)([ \t]*\|[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|\n)((?:[ \t]*\|[^\n]+\|\n?)*)/g, function(m, head, sep, body) {
+    var hcells = head.trim().split('\n').pop().replace(/^\||\|$/g,'').split('|').map(function(s){return s.trim();});
+    var aligns = sep.trim().replace(/^\||\|$/g,'').split('|').map(function(s){
+      s = s.trim(); return (s[0]===':' && s[s.length-1]===':') ? 'center' : s[s.length-1]===':' ? 'right' : 'left';
+    });
+    var rows = (body||'').trim().split('\n').filter(Boolean).map(function(r){
+      return r.replace(/^\s*\||\|\s*$/g,'').split('|').map(function(s){return s.trim();});
+    });
+    var t = '<div class="tw"><table><thead><tr>';
+    hcells.forEach(function(h,i){ t += '<th style="text-align:'+(aligns[i]||'left')+'">'+h+'</th>'; });
+    t += '</tr></thead><tbody>';
+    rows.forEach(function(row){ t += '<tr>'; row.forEach(function(c,i){ t += '<td style="text-align:'+(aligns[i]||'left')+'">'+c+'</td>'; }); t += '</tr>'; });
+    return t + '</tbody></table></div>';
+  });
+
+  // ATX headers
+  text = text.replace(/^#{6} (.+)$/gm,'<h6>$1</h6>');
+  text = text.replace(/^#{5} (.+)$/gm,'<h5>$1</h5>');
+  text = text.replace(/^#{4} (.+)$/gm,'<h4>$1</h4>');
+  text = text.replace(/^#{3} (.+)$/gm,'<h3>$1</h3>');
+  text = text.replace(/^#{2} (.+)$/gm,'<h2>$1</h2>');
+  text = text.replace(/^#{1} (.+)$/gm,'<h1>$1</h1>');
+
+  // Horizontal rules
+  text = text.replace(/^[ \t]*[-*_]{3,}[ \t]*$/gm,'<hr>');
+
+  // Blockquotes
+  text = text.replace(/((?:^>[ \t]?[^\n]*\n?)+)/gm, function(block){
+    return '<blockquote>' + block.replace(/^>[ \t]?/gm,'').trim() + '</blockquote>';
+  });
+
+  // Unordered lists
+  text = text.replace(/((?:^[ \t]*[-*+][ \t]+[^\n]+\n?)+)/gm, function(block){
+    return '<ul>' + block.trim().split('\n').filter(Boolean).map(function(item){
+      var m = item.match(/^[ \t]*[-*+][ \t]+(.+)/);
+      return m ? '<li>'+m[1]+'</li>' : '';
+    }).join('') + '</ul>';
+  });
+
+  // Ordered lists
+  text = text.replace(/((?:^[ \t]*\d+\.[ \t]+[^\n]+\n?)+)/gm, function(block){
+    return '<ol>' + block.trim().split('\n').filter(Boolean).map(function(item){
+      var m = item.match(/^[ \t]*\d+\.[ \t]+(.+)/);
+      return m ? '<li>'+m[1]+'</li>' : '';
+    }).join('') + '</ol>';
+  });
+
+  // Inline: bold + italic
+  text = text.replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>');
+  text = text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  text = text.replace(/__(.+?)__/g,'<strong>$1</strong>');
+  text = text.replace(/\*([^*\n<>]{1,120})\*/g,'<em>$1</em>');
+
+  // Links
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+  // Paragraphs
+  text = text.split(/\n{2,}/).map(function(b){
+    b = b.trim();
+    if (!b) return '';
+    if (/^<[hH][1-6]|^<[uUoO][lL]|^<[dD][iI][vV]|^<[hH][rR]|^<[bB][lL]|^<[pP][rR]/.test(b) || /\x00CB/.test(b)) return b;
+    return '<p>' + b.replace(/\n/g,' ') + '</p>';
+  }).join('\n');
+
+  // Restore code blocks
+  cbs.forEach(function(cb, i){
+    var isMermaid = cb.lang === 'mermaid';
+    var label = cb.lang ? '<div class="cb-lang">' + (isMermaid ? 'Diagram (Mermaid notation)' : cb.lang) + '</div>' : '';
+    var cls = isMermaid ? 'cb cb-diagram' : 'cb';
+    text = text.split('\x00CB'+i+'\x00').join('<div class="'+cls+'">'+label+'<pre><code>'+cb.code+'</code></pre></div>');
+  });
+
+  // Restore inline codes
+  ics.forEach(function(code, i){
+    text = text.split('\x00IC'+i+'\x00').join('<code class="ic">'+code+'</code>');
+  });
+
+  return text;
+}
+
+/* ── INIT ─────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', function() {
+
+  // Render markdown sections
+  [['research','md-research'],['prd','md-prd'],['design','md-design'],
+   ['experience','md-experience'],['architecture','md-architecture'],['epics','md-epics']
+  ].forEach(function(pair) {
+    var src  = document.getElementById(pair[1]);
+    var body = document.getElementById(pair[0]+'-body');
+    if (src && body) body.innerHTML = md2html(src.textContent.trim());
+  });
+
+  // Setup mockup iframes via srcdoc
+  ['payers','exchange','results'].forEach(function(key) {
+    var src   = document.getElementById('html-mockup-'+key);
+    var frame = document.getElementById('mockup-'+key);
+    if (src && frame) frame.srcdoc = src.textContent;
+  });
+
+  // Scrollspy
+  var sections = Array.from(document.querySelectorAll('section[id]'));
+  var links    = document.querySelectorAll('.nav-lnk[data-s]');
+  function updateNav() {
+    var y = window.scrollY + 90, cur = sections[0] ? sections[0].id : 'cover';
+    sections.forEach(function(s){ if (s.offsetTop <= y) cur = s.id; });
+    links.forEach(function(l){ l.classList.toggle('on', l.dataset.s === cur); });
+  }
+  window.addEventListener('scroll', updateNav, { passive:true });
+  updateNav();
+
+  // Smooth scroll
+  document.querySelectorAll('a[href^="#"]').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      var t = document.querySelector(this.getAttribute('href'));
+      if (t) { e.preventDefault(); t.scrollIntoView({ behavior:'smooth' }); }
+    });
+  });
+
+});
+</script>
+</body>
+</html>
