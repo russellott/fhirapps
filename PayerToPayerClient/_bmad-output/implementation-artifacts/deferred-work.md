@@ -131,3 +131,39 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-4-3-ndjson-download.md`
   summary: generateNdjson has no try/catch around JSON.stringify; a circular reference in a FHIR resource would crash the download handler with an unhandled exception.
   evidence: FHIR resources from real servers are unlikely to have circular references, but defensive wrapping is standard practice. Fix: wrap the JSON.stringify call in try/catch and skip the entry on error.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: Debug panel stores unredacted FHIR patient demographics (name, DOB, memberIdAtOldPayer) in reqData2.body via JSON.stringify(parametersBody).
+  evidence: The $member-match Parameters body contains PII; it is stored verbatim in DebugModule._entries for the session. Intentional design for a debug tool; acceptable for demo use only.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: DebugModule._entries is unbounded — accumulates across all exchanges in a session with no cap or eviction.
+  evidence: Up to ~11 entries per exchange; long demo sessions with repeated runs could grow the array and DOM cost significantly. Fix: cap _entries at a configurable limit (e.g. 50) and evict oldest on overflow.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: No exchange run boundary in the debug panel — entries from different runs share step numbers 1-4 with no visual separator or run counter.
+  evidence: After two exchanges the panel shows Step 1, Step 1, Step 2, Step 2... with no way to identify which run an entry belongs to. Fix: add a monotonic exchange counter to DebugModule and include it in rendered summaries.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: No clear/reset method on DebugModule; users cannot get a clean panel view for a new exchange without reloading the page.
+  evidence: For a demo tool where the operator wants to show exactly what happens during one exchange, stale entries from prior runs pollute the view. Fix: add DebugModule.clear() and call it at the start of runExchange(), or expose a Clear button in the panel header.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: Step-4 resource-fetch network failures (CORS abort, DNS failure, fetch() throw) produce no debug entry — the per-resource catch block silently returns without calling appendEntry.
+  evidence: Network-level failures at step 4 are invisible in the debug panel, which defeats its diagnostic value for connectivity troubleshooting. Fix: add DebugModule.appendEntry({ step: 4, request: reqData4, response: { status: 0, body: String(err) } }) inside the catch block.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: oauth token responses with refresh_token or id_token fields are not stripped by _redact(); only access_token is removed.
+  evidence: OAuth token endpoints frequently return refresh_token alongside access_token. Fix: extend the deletion loop to cover refresh_token and id_token fields.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: A 200 OK response with non-JSON body (HTML error page, empty body) causes response.json() to throw between the status check and appendEntry, resulting in no debug entry and a silent exception in the exchange flow.
+  evidence: Misconfigured auth servers occasionally return HTML error pages with HTTP 200. Fix: wrap each response.json() call in try/catch and log a debug entry with the parse error on failure.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: Debug panel is always visible in the Exchange view with no opt-in mechanism; presenters cannot hide it for polished demos without modifying source.
+  evidence: DebugModule.render() is called unconditionally from renderExchange(). Fix: add a DebugModule._visible flag defaulting to false, toggleable via URL param ?debug=1.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-4-4-debug-panel.md`
+  summary: The max-height CSS transition collapses the debug panel near-instantly when it contains many entries, because the transition duration scales with the ratio of actual content height to max-height.
+  evidence: Known CSS limitation of max-height transitions. Fix: use explicit JS-driven pixel-height animation or remove the transition to avoid the illusion of broken animation.
