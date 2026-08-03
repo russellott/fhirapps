@@ -841,15 +841,49 @@
 
             const baseUrl = client.state.serverUrl;
             const accessToken = client.state.tokenResponse.access_token;
-            let patientId = client.state.tokenResponse.patient;
 
-            console.log('Patient ID from token:', patientId);
+            // Decode the JWT payload (base64url → JSON) without verifying the signature.
+            // Used only to extract claims the token response body omits.
+            function decodeJwtPayload(token) {
+                try {
+                    const payloadB64 = token.split('.')[1];
+                    if (!payloadB64) return null;
+                    const padded = payloadB64.replace(/-/g, '+').replace(/_/g, '/')
+                        + '=='.slice((payloadB64.length + 3) % 4 || 0);
+                    return JSON.parse(atob(padded));
+                } catch (e) {
+                    console.warn('Could not decode JWT payload:', e.message);
+                    return null;
+                }
+            }
 
-            // If the token response did not include a patient ID,
-            // try to discover it by searching for patients.
+            // Normalize a patient ID: strip a leading "Patient/" prefix if present.
+            function normalizePatientId(raw) {
+                if (!raw) return raw;
+                return String(raw).replace(/^Patient\//i, '');
+            }
+
+            // 1. Try the top-level token response field (standard SMART launch param).
+            // 2. Fall back to the JWT payload claim (some servers embed it there only).
+            let patientId = normalizePatientId(client.state.tokenResponse.patient);
+
             if (!patientId) {
-                console.warn('⚠ No patient ID in token response — will search for patients');
-                addDebugLog('WARN', 'No patient ID in token response — searching...');
+                const jwtPayload = decodeJwtPayload(accessToken);
+                if (jwtPayload?.patient) {
+                    patientId = normalizePatientId(jwtPayload.patient);
+                    addDebugLog('FHIR', `Patient ID extracted from JWT payload: ${patientId}`);
+                    console.log('Patient ID from JWT payload:', patientId);
+                }
+            } else {
+                addDebugLog('FHIR', `Patient ID from token response: ${patientId}`);
+            }
+
+            console.log('Patient ID resolved:', patientId);
+
+            // If still not found, fall through to the server search below.
+            if (!patientId) {
+                console.warn('⚠ No patient ID in token or JWT — will search for patients');
+                addDebugLog('WARN', 'No patient ID found — falling back to Patient search');
             }
 
             // Helper function for FHIR requests
