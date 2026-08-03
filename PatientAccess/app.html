@@ -310,6 +310,61 @@
             const content = document.getElementById('debugContent');
             let html = '';
 
+            // FHIR Requests Section
+            if (debugInfo.fhirRequests.length > 0) {
+                html += '<div class="debug-section"><h3>FHIR Requests</h3>';
+                debugInfo.fhirRequests.forEach((req, idx) => {
+                    const statusColor = req.status === 'success' ? '#aed581'
+                        : req.status === 'error' ? '#f44336'
+                        : '#ffd54f';
+                    const statusIcon = req.status === 'success' ? '✓'
+                        : req.status === 'error' ? '✗'
+                        : '…';
+                    html += `
+                        <div style="margin-bottom:10px; padding:6px 8px; border-left: 3px solid ${statusColor};">
+                            <div class="debug-line">
+                                <span style="color:${statusColor}; font-weight:bold;">#${idx + 1} [${statusIcon} ${req.status.toUpperCase()}]</span>
+                                <span class="debug-value" style="margin-left:8px;">${req.resourcePath}</span>
+                            </div>
+                            <div class="debug-line">
+                                <span class="debug-label">Target URL:</span>
+                                <span class="debug-value" style="font-size:11px; word-break:break-all;">${req.targetUrl}</span>
+                            </div>
+                            <div class="debug-line">
+                                <span class="debug-label">Via Proxy:</span>
+                                <span class="debug-value">${req.viaProxy ? 'Yes' : 'No'}</span>
+                            </div>
+                            ${req.httpStatus !== null ? `
+                            <div class="debug-line">
+                                <span class="debug-label">HTTP Status:</span>
+                                <span class="debug-value" style="color:${req.httpStatus >= 200 && req.httpStatus < 300 ? '#aed581' : '#f44336'};">${req.httpStatus}</span>
+                            </div>` : ''}
+                            ${req.duration !== null ? `
+                            <div class="debug-line">
+                                <span class="debug-label">Duration:</span>
+                                <span class="debug-value">${req.duration}ms</span>
+                            </div>` : ''}
+                            ${req.resourceType ? `
+                            <div class="debug-line">
+                                <span class="debug-label">Resource Type:</span>
+                                <span class="debug-value">${req.resourceType}</span>
+                            </div>` : ''}
+                            ${req.entryCount !== null ? `
+                            <div class="debug-line">
+                                <span class="debug-label">Entry Count:</span>
+                                <span class="debug-value">${req.entryCount}</span>
+                            </div>` : ''}
+                            ${req.error ? `
+                            <div class="debug-line">
+                                <span class="debug-label" style="color:#f44336;">Error:</span>
+                                <span class="debug-value" style="color:#f44336;">${req.error}</span>
+                            </div>` : ''}
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
             // Network Requests Section
             const networkRequests = NetworkDebugger.getRequests();
             if (networkRequests.length > 0) {
@@ -807,46 +862,75 @@
                     ? `${CORS_PROXY_URL}/?url=${encodeURIComponent(targetUrl)}`
                     : targetUrl;
 
-                console.log(`\n=== 🔍 FHIR Request ===`);
+                // Create a live entry — mutated in-place as the request progresses
+                const entry = {
+                    resourcePath,
+                    targetUrl,
+                    viaProxy: shouldProxy,
+                    status: 'pending',
+                    httpStatus: null,
+                    duration: null,
+                    entryCount: null,
+                    resourceType: null,
+                    error: null,
+                    time: new Date().toISOString()
+                };
+                debugInfo.fhirRequests.push(entry);
+
+                console.log(`\n=== FHIR Request ===`);
                 console.log('Resource Path:', resourcePath);
                 console.log('Target URL:', targetUrl);
-                console.log('Full URL:', fullUrl);
                 console.log('Via CORS proxy:', shouldProxy);
 
-                addDebugLog('FHIR', `Requesting: ${targetUrl}${shouldProxy ? ' (via proxy)' : ''}`);
-
-                debugInfo.fhirRequests.push({
-                    method: 'GET',
-                    url: targetUrl,
-                    resourcePath: resourcePath,
-                    baseUrl: baseUrl,
-                    originalUrlParam: resourcePath,
-                    viaProxy: shouldProxy,
-                    time: new Date().toISOString()
-                });
+                addDebugLog('FHIR', `→ ${resourcePath}${shouldProxy ? ' [proxy]' : ''}`);
                 updateDebugPanel();
 
-                const response = await fetch(fullUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`
-                        // No Accept header - avoid CORS preflight
-                    },
-                    referrerPolicy: 'no-referrer'
-                });
+                const t0 = performance.now();
+                try {
+                    const response = await fetch(fullUrl, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${accessToken}`
+                            // No Accept header - avoid CORS preflight
+                        },
+                        referrerPolicy: 'no-referrer'
+                    });
 
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('❌ Request failed:', response.status, response.statusText);
-                    console.error('Error body:', errorText);
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    entry.duration = Math.round(performance.now() - t0);
+                    entry.httpStatus = response.status;
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        entry.status = 'error';
+                        entry.error = `HTTP ${response.status}: ${response.statusText}`;
+                        console.error('Request failed:', response.status, response.statusText);
+                        console.error('Error body:', errorText);
+                        addDebugLog('FHIR', `✗ ${resourcePath} HTTP ${response.status} (${entry.duration}ms)`);
+                        updateDebugPanel();
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    entry.status = 'success';
+                    entry.resourceType = data.resourceType;
+                    entry.entryCount = Array.isArray(data.entry) ? data.entry.length : (data.resourceType === 'Bundle' ? 0 : null);
+                    console.log('Response received:', data);
+                    addDebugLog('FHIR', `✓ ${resourcePath} → ${data.resourceType}${entry.entryCount !== null ? ` (${entry.entryCount})` : ''} ${entry.duration}ms`);
+                    updateDebugPanel();
+
+                    return data;
+
+                } catch (error) {
+                    if (entry.status === 'pending') {
+                        // fetch() itself threw before we got a response (network/CORS error)
+                        entry.status = 'error';
+                        entry.duration = Math.round(performance.now() - t0);
+                        entry.error = error.message;
+                        addDebugLog('FHIR', `✗ ${resourcePath} → ${error.message} (${entry.duration}ms)`);
+                        updateDebugPanel();
+                    }
+                    throw error;
                 }
-
-                const data = await response.json();
-                addDebugLog('FHIR', `✓ Request successful: ${targetUrl}`);
-                console.log('✓ Response received:', data);
-
-                return data;
             }
 
             try {
