@@ -35,7 +35,7 @@ const FHIR_SERVERS = {
         authorizeUrl: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authsbx/protocol/openid-connect/auth",
         tokenUrl: "https://auth.platform.sbx.mt.healthinteractive.net/realms/authsbx/protocol/openid-connect/token",
         // FHIR base URL — the actual data endpoint (different from the Keycloak ISS)
-        fhirBaseUrl: "https://api.platform.sbx.mt.healthinteractive.net/patient-access/",
+        fhirBaseUrl: "https://api.platform.sbx.mt.healthinteractive.net/patient-access",
         // Enable OIDC auto-discovery as fallback (will fetch .well-known/openid-configuration)
         useOidcDiscovery: true,
         // Route token exchange through CORS proxy (server does not send Access-Control-Allow-Origin)
