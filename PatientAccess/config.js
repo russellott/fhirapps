@@ -26,7 +26,7 @@ const FHIR_SERVERS = {
         tokenAuthMethod: "client_secret_post",
         tokenReferrerPolicy: "no-referrer",
         allowBasicAuthFallback: false,
-        scope: "patient/patient.read patient/explanationofbenefit.read patient/condition.read patient/allergyintolerance.read patient/medicationrequest.read openid fhirUser offline_access",
+        scope: "patient/patient.read patient/explanationofbenefit.read openid launch/patient",
         // CRITICAL: These must EXACTLY match what's registered with the FHIR server
         redirectUri: `${APP_BASE_URL}/app.html`,
         launchUri: `${APP_BASE_URL}/launch.html`,
