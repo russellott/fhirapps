@@ -863,42 +863,66 @@
 
                 // Fetch Conditions
                 console.log(`\n=== Fetching Conditions for Patient ${patientId} ===`);
-                const conditionsBundle = await fhirFetch(`Condition?patient=${patientId}&_count=1000`);
-                const conditions = conditionsBundle.entry ? conditionsBundle.entry.map(e => e.resource) : [];
-                console.log('✓ Conditions retrieved:', conditions);
-                addDebugLog('FHIR', `✓ Found ${conditions.length} conditions`);
-                stats.conditions = conditions.length;
-                displayConditions(conditions);
+                try {
+                    const conditionsBundle = await fhirFetch(`Condition?patient=${patientId}&_count=1000`);
+                    const conditions = conditionsBundle.entry ? conditionsBundle.entry.map(e => e.resource) : [];
+                    console.log('✓ Conditions retrieved:', conditions);
+                    addDebugLog('FHIR', `✓ Found ${conditions.length} conditions`);
+                    stats.conditions = conditions.length;
+                    displayConditions(conditions);
+                } catch (e) {
+                    console.warn('⚠ Conditions unavailable:', e.message);
+                    addDebugLog('FHIR', `⚠ Conditions skipped: ${e.message}`);
+                    displayConditions([]);
+                }
 
                 // Fetch Medications
                 console.log(`\n=== Fetching Medications ===`);
-                const medicationsBundle = await fhirFetch(`MedicationRequest?patient=${patientId}&_count=1000`);
-                const medications = medicationsBundle.entry ? medicationsBundle.entry.map(e => e.resource) : [];
-                console.log('✓ Medications retrieved:', medications);
-                addDebugLog('FHIR', `✓ Found ${medications.length} medications`);
-                stats.medications = medications.length;
-                displayMedications(medications);
+                try {
+                    const medicationsBundle = await fhirFetch(`MedicationRequest?patient=${patientId}&_count=1000`);
+                    const medications = medicationsBundle.entry ? medicationsBundle.entry.map(e => e.resource) : [];
+                    console.log('✓ Medications retrieved:', medications);
+                    addDebugLog('FHIR', `✓ Found ${medications.length} medications`);
+                    stats.medications = medications.length;
+                    displayMedications(medications);
+                } catch (e) {
+                    console.warn('⚠ Medications unavailable:', e.message);
+                    addDebugLog('FHIR', `⚠ Medications skipped: ${e.message}`);
+                    displayMedications([]);
+                }
 
                 // Fetch Immunizations
                 console.log(`\n=== Fetching Immunizations ===`);
-                const immunizationsBundle = await fhirFetch(`Immunization?patient=${patientId}&_count=1000`);
-                const immunizations = immunizationsBundle.entry ? immunizationsBundle.entry.map(e => e.resource) : [];
-                console.log('✓ Immunizations retrieved:', immunizations);
-                addDebugLog('FHIR', `✓ Found ${immunizations.length} immunizations`);
-                stats.immunizations = immunizations.length;
-                displayImmunizations(immunizations);
+                try {
+                    const immunizationsBundle = await fhirFetch(`Immunization?patient=${patientId}&_count=1000`);
+                    const immunizations = immunizationsBundle.entry ? immunizationsBundle.entry.map(e => e.resource) : [];
+                    console.log('✓ Immunizations retrieved:', immunizations);
+                    addDebugLog('FHIR', `✓ Found ${immunizations.length} immunizations`);
+                    stats.immunizations = immunizations.length;
+                    displayImmunizations(immunizations);
+                } catch (e) {
+                    console.warn('⚠ Immunizations unavailable:', e.message);
+                    addDebugLog('FHIR', `⚠ Immunizations skipped: ${e.message}`);
+                    displayImmunizations([]);
+                }
 
                 // Fetch Explanation of Benefits (Claims/EOBs)
                 console.log(`\n=== Fetching Explanation of Benefits (EOBs) ===`);
-                const eobBundle = await fhirFetch(`ExplanationOfBenefit?patient=${patientId}&_count=1000`);
-                const eobs = eobBundle.entry ? eobBundle.entry.map(e => e.resource) : [];
-                console.log('✓ EOBs retrieved:', eobs);
-                addDebugLog('FHIR', `✓ Found ${eobs.length} explanation of benefits`);
-                stats.eobs = eobs.length;
-                displayEOBs(eobs);
+                try {
+                    const eobBundle = await fhirFetch(`ExplanationOfBenefit?patient=${patientId}&_count=1000`);
+                    const eobs = eobBundle.entry ? eobBundle.entry.map(e => e.resource) : [];
+                    console.log('✓ EOBs retrieved:', eobs);
+                    addDebugLog('FHIR', `✓ Found ${eobs.length} explanation of benefits`);
+                    stats.eobs = eobs.length;
+                    displayEOBs(eobs);
+                } catch (e) {
+                    console.warn('⚠ EOBs unavailable:', e.message);
+                    addDebugLog('FHIR', `⚠ EOBs skipped: ${e.message}`);
+                    displayEOBs([]);
+                }
 
                 displayStats(stats);
-                addDebugLog('SUCCESS', '✓ All patient data loaded successfully');
+                addDebugLog('SUCCESS', '✓ Patient data load complete');
 
             } catch (error) {
                 console.error('\n=== ❌ FHIR Request Error ===');
