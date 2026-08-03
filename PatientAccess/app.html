@@ -226,6 +226,30 @@
         .network-request.failed {
             border-left-color: #f44336;
         }
+
+        .resource-item-header {
+            cursor: pointer;
+        }
+
+        .json-toggle-hint {
+            float: right;
+            color: #0076ce;
+            font-size: 11px;
+            font-weight: normal;
+        }
+
+        .resource-json {
+            background: #1e272e;
+            color: #aed581;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            word-break: break-all;
+        }
     </style>
 </head>
 
@@ -273,6 +297,34 @@
             errors: []
         };
 
+        // Registry for raw resource JSON; keyed by auto-incremented id.
+        // Populated by storeResource(), read by toggleResourceJson().
+        let _resourceJsonStore = {};
+        let _resourceJsonCounter = 0;
+
+        function storeResource(resource) {
+            const id = `res_${_resourceJsonCounter++}`;
+            _resourceJsonStore[id] = resource;
+            return id;
+        }
+
+        function toggleResourceJson(id) {
+            const el = document.getElementById(`json_${id}`);
+            if (!el) return;
+            const hint = el.previousElementSibling?.querySelector('.json-toggle-hint');
+            if (el.style.display === 'none') {
+                el.style.display = 'block';
+                if (hint) hint.textContent = '{ } Hide';
+            } else {
+                el.style.display = 'none';
+                if (hint) hint.textContent = '{ } JSON';
+            }
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
         // Held at module scope so retryFhirLoad() can re-invoke loadPatientData
         // without going through the token exchange again.
         let _fhirClient = null;
@@ -283,6 +335,8 @@
             // Reset UI and FHIR request history; keep auth/token debug sections intact.
             debugInfo.fhirRequests = [];
             debugInfo.errors = [];
+            _resourceJsonStore = {};
+            _resourceJsonCounter = 0;
             document.getElementById('stats').innerHTML = '';
             document.getElementById('content').innerHTML = `
                 <h2>🔄 Loading patient data...</h2>
@@ -858,7 +912,8 @@
                 conditions: 0,
                 medications: 0,
                 immunizations: 0,
-                eobs: 0
+                eobs: 0,
+                coverage: 0
             };
 
             const baseUrl = client.state.serverUrl;
@@ -1071,6 +1126,21 @@
                     displayEOBs([]);
                 }
 
+                // Fetch Coverage
+                console.log(`\n=== Fetching Coverage ===`);
+                try {
+                    const coverageBundle = await fhirFetch(`Coverage?patient=${patientId}`);
+                    const coverages = coverageBundle.entry ? coverageBundle.entry.map(e => e.resource) : [];
+                    console.log('✓ Coverage retrieved:', coverages);
+                    addDebugLog('FHIR', `✓ Found ${coverages.length} coverage records`);
+                    stats.coverage = coverages.length;
+                    displayCoverage(coverages);
+                } catch (e) {
+                    console.warn('⚠ Coverage unavailable:', e.message);
+                    addDebugLog('FHIR', `⚠ Coverage skipped: ${e.message}`);
+                    displayCoverage([]);
+                }
+
                 displayStats(stats);
                 addDebugLog('SUCCESS', '✓ Patient data load complete');
 
@@ -1145,6 +1215,10 @@
                     <div class="stat-number">${stats.eobs}</div>
                     <div class="stat-label">Claims (EOB)</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-number">${stats.coverage}</div>
+                    <div class="stat-label">Coverage</div>
+                </div>
             `;
         }
 
@@ -1155,14 +1229,21 @@
                 'Name not available';
             const birthDate = patient.birthDate || 'Not available';
             const gender = patient.gender || 'Not specified';
+            const resId = storeResource(patient);
 
             document.getElementById('content').innerHTML = `
                 <div class="section">
                     <h2>👤 Patient Information</h2>
-                    <p><strong>Name:</strong> ${fullName}</p>
-                    <p><strong>Date of Birth:</strong> ${birthDate}</p>
-                    <p><strong>Gender:</strong> ${gender}</p>
-                    <p><strong>Patient ID:</strong> ${patient.id}</p>
+                    <div class="resource-item">
+                        <div class="resource-item-header" onclick="toggleResourceJson('${resId}')">
+                            <strong>${fullName}</strong>
+                            <span class="json-toggle-hint">{ } JSON</span><br>
+                            <small>Date of Birth: ${birthDate}</small><br>
+                            <small>Gender: ${gender}</small><br>
+                            <small>Patient ID: ${patient.id}</small>
+                        </div>
+                        <pre id="json_${resId}" class="resource-json" style="display:none;">${escapeHtml(JSON.stringify(patient, null, 2))}</pre>
+                    </div>
                 </div>
             `;
         }
@@ -1176,11 +1257,16 @@
                         condition.code?.coding?.[0]?.display ||
                         'Unspecified condition';
                     const status = condition.clinicalStatus?.coding?.[0]?.code || 'unknown';
+                    const resId = storeResource(condition);
 
                     html += `
                         <div class="resource-item">
-                            <strong>${code}</strong><br>
-                            <small>Status: ${status}</small>
+                            <div class="resource-item-header" onclick="toggleResourceJson('${resId}')">
+                                <strong>${code}</strong>
+                                <span class="json-toggle-hint">{ } JSON</span><br>
+                                <small>Status: ${status}</small>
+                            </div>
+                            <pre id="json_${resId}" class="resource-json" style="display:none;">${escapeHtml(JSON.stringify(condition, null, 2))}</pre>
                         </div>
                     `;
                 });
@@ -1200,10 +1286,15 @@
                     const medName = med.medicationCodeableConcept?.text ||
                         med.medicationCodeableConcept?.coding?.[0]?.display ||
                         'Unknown medication';
+                    const resId = storeResource(med);
 
                     html += `
                         <div class="resource-item">
-                            <strong>${medName}</strong>
+                            <div class="resource-item-header" onclick="toggleResourceJson('${resId}')">
+                                <strong>${medName}</strong>
+                                <span class="json-toggle-hint">{ } JSON</span>
+                            </div>
+                            <pre id="json_${resId}" class="resource-json" style="display:none;">${escapeHtml(JSON.stringify(med, null, 2))}</pre>
                         </div>
                     `;
                 });
@@ -1224,11 +1315,16 @@
                         imm.vaccineCode?.coding?.[0]?.display ||
                         'Unknown vaccine';
                     const date = imm.occurrenceDateTime || imm.date || 'Date not recorded';
+                    const resId = storeResource(imm);
 
                     html += `
                         <div class="resource-item">
-                            <strong>${vaccine}</strong><br>
-                            <small>Date: ${date}</small>
+                            <div class="resource-item-header" onclick="toggleResourceJson('${resId}')">
+                                <strong>${vaccine}</strong>
+                                <span class="json-toggle-hint">{ } JSON</span><br>
+                                <small>Date: ${date}</small>
+                            </div>
+                            <pre id="json_${resId}" class="resource-json" style="display:none;">${escapeHtml(JSON.stringify(imm, null, 2))}</pre>
                         </div>
                     `;
                 });
@@ -1283,20 +1379,65 @@
                     // Count items
                     const itemCount = eob.item?.length || 0;
 
+                    const resId = storeResource(eob);
                     html += `
                 <div class="resource-item">
-                    <strong>${claimType}</strong> - <em>${status}</em><br>
-                    ${eob.id ? `<small>ID: ${eob.id}</small><br>` : ''}
-                    <small>Created: ${created}</small><br>
-                    ${billablePeriod !== 'N/A' ? `<small>Service Period: ${billablePeriod}</small><br>` : ''}
-                    <small>Provider: ${provider}</small><br>
-                    ${total !== null ? `<small>Total Submitted: ${totalCurrency} ${total.toFixed(2)}</small><br>` : ''}
-                    ${payment !== null ? `<small>Payment: ${paymentCurrency} ${payment.toFixed(2)}</small><br>` : ''}
-                    <small>Outcome: ${outcome}</small>
-                    ${itemCount > 0 ? ` | <small>Items: ${itemCount}</small>` : ''}
-                    ${eob.diagnosis?.length > 0 ? ` | <small>Diagnoses: ${eob.diagnosis.length}</small>` : ''}
+                    <div class="resource-item-header" onclick="toggleResourceJson('${resId}')">
+                        <strong>${claimType}</strong> - <em>${status}</em>
+                        <span class="json-toggle-hint">{ } JSON</span><br>
+                        ${eob.id ? `<small>ID: ${eob.id}</small><br>` : ''}
+                        <small>Created: ${created}</small><br>
+                        ${billablePeriod !== 'N/A' ? `<small>Service Period: ${billablePeriod}</small><br>` : ''}
+                        <small>Provider: ${provider}</small><br>
+                        ${total !== null ? `<small>Total Submitted: ${totalCurrency} ${total.toFixed(2)}</small><br>` : ''}
+                        ${payment !== null ? `<small>Payment: ${paymentCurrency} ${payment.toFixed(2)}</small><br>` : ''}
+                        <small>Outcome: ${outcome}</small>
+                        ${itemCount > 0 ? ` | <small>Items: ${itemCount}</small>` : ''}
+                        ${eob.diagnosis?.length > 0 ? ` | <small>Diagnoses: ${eob.diagnosis.length}</small>` : ''}
+                    </div>
+                    <pre id="json_${resId}" class="resource-json" style="display:none;">${escapeHtml(JSON.stringify(eob, null, 2))}</pre>
                 </div>
             `;
+                });
+            }
+
+            html += '</div>';
+            document.getElementById('content').innerHTML += html;
+        }
+
+        function displayCoverage(coverages) {
+            let html = '<div class="section"><h2>🛡️ Coverage</h2>';
+
+            if (!coverages || coverages.length === 0) {
+                html += '<p>No coverage found.</p>';
+            } else {
+                coverages.forEach(cov => {
+                    const status = cov.status || 'unknown';
+                    const type = cov.type?.text || cov.type?.coding?.[0]?.display || 'Unknown type';
+                    const payor = cov.payor?.[0]?.display || cov.payor?.[0]?.reference || 'Unknown payor';
+                    const periodStart = cov.period?.start ? new Date(cov.period.start).toLocaleDateString() : null;
+                    const periodEnd = cov.period?.end ? new Date(cov.period.end).toLocaleDateString() : null;
+                    const period = periodStart
+                        ? `${periodStart}${periodEnd ? ' – ' + periodEnd : ' – present'}`
+                        : null;
+                    const subscriberId = cov.subscriberId || null;
+                    const planClass = cov.class?.find(c => c.type?.coding?.[0]?.code === 'plan');
+                    const planName = planClass?.name || planClass?.value || null;
+                    const resId = storeResource(cov);
+
+                    html += `
+                        <div class="resource-item">
+                            <div class="resource-item-header" onclick="toggleResourceJson('${resId}')">
+                                <strong>${type}</strong> — <em>${status}</em>
+                                <span class="json-toggle-hint">{ } JSON</span><br>
+                                <small>Payor: ${payor}</small><br>
+                                ${period ? `<small>Period: ${period}</small><br>` : ''}
+                                ${subscriberId ? `<small>Subscriber ID: ${subscriberId}</small><br>` : ''}
+                                ${planName ? `<small>Plan: ${planName}</small>` : ''}
+                            </div>
+                            <pre id="json_${resId}" class="resource-json" style="display:none;">${escapeHtml(JSON.stringify(cov, null, 2))}</pre>
+                        </div>
+                    `;
                 });
             }
 
