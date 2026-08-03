@@ -273,6 +273,24 @@
             errors: []
         };
 
+        // Held at module scope so retryFhirLoad() can re-invoke loadPatientData
+        // without going through the token exchange again.
+        let _fhirClient = null;
+        let _fhirBaseUrl = null;
+
+        function retryFhirLoad() {
+            if (!_fhirClient || !_fhirBaseUrl) return;
+            // Reset UI and FHIR request history; keep auth/token debug sections intact.
+            debugInfo.fhirRequests = [];
+            debugInfo.errors = [];
+            document.getElementById('stats').innerHTML = '';
+            document.getElementById('content').innerHTML = `
+                <h2>🔄 Loading patient data...</h2>
+                <p>Connecting to FHIR server and retrieving records...</p>`;
+            updateDebugPanel();
+            loadPatientData(_fhirClient, _fhirBaseUrl);
+        }
+
         let debugVisible = false;
 
         function addDebugLog(category, message, data = null) {
@@ -797,6 +815,10 @@
                     // Add detailed logging to debug info
                     addDebugLog('FHIR', `Client initialized with base URL: ${clientBaseUrl}`);
 
+                    // Store for retry
+                    _fhirClient = client;
+                    _fhirBaseUrl = clientBaseUrl;
+
                     // Load patient data
                     loadPatientData(client, clientBaseUrl);
 
@@ -1084,6 +1106,12 @@
                 <p><strong>Error Type:</strong> ${error.name}</p>
                 <p><strong>Expected Base URL:</strong> ${expectedBaseUrl}</p>
                 <p><strong>Client Base URL:</strong> ${client.state.serverUrl}</p>
+                <hr>
+                <button onclick="retryFhirLoad()" style="
+                    background: #1976d2; color: #fff; border: none; border-radius: 4px;
+                    padding: 10px 24px; font-size: 15px; cursor: pointer; margin-bottom: 12px;">
+                    🔄 Retry
+                </button>
                 <hr>
                 <p><strong>💡 Troubleshooting:</strong></p>
                 <ul style="text-align: left; margin-left: 20px;">
