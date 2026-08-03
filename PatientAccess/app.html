@@ -798,21 +798,30 @@
 
             // Helper function for FHIR requests
             async function fhirFetch(resourcePath) {
-                const fullUrl = `${baseUrl}/${resourcePath}`;
+                const targetUrl = `${baseUrl.replace(/\/$/, '')}/${resourcePath}`;
+
+                // Route through CORS proxy when the server config requires it
+                const shouldProxy = !!(client.state.useCorsProxy &&
+                    typeof CORS_PROXY_URL !== 'undefined' && CORS_PROXY_URL);
+                const fullUrl = shouldProxy
+                    ? `${CORS_PROXY_URL}/?url=${encodeURIComponent(targetUrl)}`
+                    : targetUrl;
 
                 console.log(`\n=== 🔍 FHIR Request ===`);
                 console.log('Resource Path:', resourcePath);
+                console.log('Target URL:', targetUrl);
                 console.log('Full URL:', fullUrl);
-                console.log('Base URL:', baseUrl);
+                console.log('Via CORS proxy:', shouldProxy);
 
-                addDebugLog('FHIR', `Requesting: ${fullUrl}`);
+                addDebugLog('FHIR', `Requesting: ${targetUrl}${shouldProxy ? ' (via proxy)' : ''}`);
 
                 debugInfo.fhirRequests.push({
                     method: 'GET',
-                    url: fullUrl,
+                    url: targetUrl,
                     resourcePath: resourcePath,
                     baseUrl: baseUrl,
                     originalUrlParam: resourcePath,
+                    viaProxy: shouldProxy,
                     time: new Date().toISOString()
                 });
                 updateDebugPanel();
@@ -834,7 +843,7 @@
                 }
 
                 const data = await response.json();
-                addDebugLog('FHIR', `✓ Request successful: ${fullUrl}`);
+                addDebugLog('FHIR', `✓ Request successful: ${targetUrl}`);
                 console.log('✓ Response received:', data);
 
                 return data;
