@@ -1014,7 +1014,7 @@
                 // Fetch Conditions
                 console.log(`\n=== Fetching Conditions for Patient ${patientId} ===`);
                 try {
-                    const conditionsBundle = await fhirFetch(`Condition?patient=${patientId}&_count=1000`);
+                    const conditionsBundle = await fhirFetch(`Condition?patient=${patientId}`);
                     const conditions = conditionsBundle.entry ? conditionsBundle.entry.map(e => e.resource) : [];
                     console.log('✓ Conditions retrieved:', conditions);
                     addDebugLog('FHIR', `✓ Found ${conditions.length} conditions`);
@@ -1029,7 +1029,7 @@
                 // Fetch Medications
                 console.log(`\n=== Fetching Medications ===`);
                 try {
-                    const medicationsBundle = await fhirFetch(`MedicationRequest?patient=${patientId}&_count=1000`);
+                    const medicationsBundle = await fhirFetch(`MedicationRequest?patient=${patientId}`);
                     const medications = medicationsBundle.entry ? medicationsBundle.entry.map(e => e.resource) : [];
                     console.log('✓ Medications retrieved:', medications);
                     addDebugLog('FHIR', `✓ Found ${medications.length} medications`);
@@ -1044,7 +1044,7 @@
                 // Fetch Immunizations
                 console.log(`\n=== Fetching Immunizations ===`);
                 try {
-                    const immunizationsBundle = await fhirFetch(`Immunization?patient=${patientId}&_count=1000`);
+                    const immunizationsBundle = await fhirFetch(`Immunization?patient=${patientId}`);
                     const immunizations = immunizationsBundle.entry ? immunizationsBundle.entry.map(e => e.resource) : [];
                     console.log('✓ Immunizations retrieved:', immunizations);
                     addDebugLog('FHIR', `✓ Found ${immunizations.length} immunizations`);
@@ -1059,7 +1059,7 @@
                 // Fetch Explanation of Benefits (Claims/EOBs)
                 console.log(`\n=== Fetching Explanation of Benefits (EOBs) ===`);
                 try {
-                    const eobBundle = await fhirFetch(`ExplanationOfBenefit?patient=${patientId}&_count=1000`);
+                    const eobBundle = await fhirFetch(`ExplanationOfBenefit?patient=${patientId}`);
                     const eobs = eobBundle.entry ? eobBundle.entry.map(e => e.resource) : [];
                     console.log('✓ EOBs retrieved:', eobs);
                     addDebugLog('FHIR', `✓ Found ${eobs.length} explanation of benefits`);
