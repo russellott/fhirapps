@@ -213,6 +213,36 @@
             clientSecret: config?.clientSecret ? '***HIDDEN***' : 'not provided'
         });
         
+        const ALL_SCOPES = [
+            "openid",
+            "launch/patient",
+            "offline_access",
+            "patient/AllergyIntolerance.read",
+            "patient/CarePlan.read",
+            "patient/CareTeam.read",
+            "patient/Condition.read",
+            "patient/Coverage.read",
+            "patient/Device.read",
+            "patient/DiagnosticReport.read",
+            "patient/DocumentReference.read",
+            "patient/Encounter.read",
+            "patient/ExplanationOfBenefit.read",
+            "patient/Goal.read",
+            "patient/Immunization.read",
+            "patient/MedicationAdministration.read",
+            "patient/MedicationDispense.read",
+            "patient/MedicationRequest.read",
+            "patient/MedicationStatement.read",
+            "patient/Observation.read",
+            "patient/Patient.read",
+            "patient/Procedure.read",
+            "patient/Provenance.read",
+            "patient/QuestionnaireResponse.read",
+            "patient/RelatedPerson.read",
+            "patient/ServiceRequest.read",
+            "patient/Specimen.read"
+        ];
+
         if (!config) {
             document.body.innerHTML = '<div class="error">Invalid server configuration</div>';
         } else {
@@ -226,36 +256,6 @@
             } else {
                 showScopeSelection();
             }
-
-            const ALL_SCOPES = [
-                "openid",
-                "launch/patient",
-                "offline_access",
-                "patient/AllergyIntolerance.read",
-                "patient/CarePlan.read",
-                "patient/CareTeam.read",
-                "patient/Condition.read",
-                "patient/Coverage.read",
-                "patient/Device.read",
-                "patient/DiagnosticReport.read",
-                "patient/DocumentReference.read",
-                "patient/Encounter.read",
-                "patient/ExplanationOfBenefit.read",
-                "patient/Goal.read",
-                "patient/Immunization.read",
-                "patient/MedicationAdministration.read",
-                "patient/MedicationDispense.read",
-                "patient/MedicationRequest.read",
-                "patient/MedicationStatement.read",
-                "patient/Observation.read",
-                "patient/Patient.read",
-                "patient/Procedure.read",
-                "patient/Provenance.read",
-                "patient/QuestionnaireResponse.read",
-                "patient/RelatedPerson.read",
-                "patient/ServiceRequest.read",
-                "patient/Specimen.read"
-            ];
 
             function showScopeSelection() {
                 document.getElementById('serverInfo').innerHTML = `
