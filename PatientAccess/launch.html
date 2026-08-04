@@ -58,6 +58,10 @@
             background: #fff3e0;
             color: #f57c00;
         }
+        .scope-badge.unchecked {
+            background: #f5f5f5;
+            color: #999;
+        }
         .error {
             background: #ffebee;
             border-left: 4px solid #c62828;
@@ -223,6 +227,36 @@
                 showScopeSelection();
             }
 
+            const ALL_SCOPES = [
+                "openid",
+                "launch/patient",
+                "offline_access",
+                "patient/AllergyIntolerance.read",
+                "patient/CarePlan.read",
+                "patient/CareTeam.read",
+                "patient/Condition.read",
+                "patient/Coverage.read",
+                "patient/Device.read",
+                "patient/DiagnosticReport.read",
+                "patient/DocumentReference.read",
+                "patient/Encounter.read",
+                "patient/ExplanationOfBenefit.read",
+                "patient/Goal.read",
+                "patient/Immunization.read",
+                "patient/MedicationAdministration.read",
+                "patient/MedicationDispense.read",
+                "patient/MedicationRequest.read",
+                "patient/MedicationStatement.read",
+                "patient/Observation.read",
+                "patient/Patient.read",
+                "patient/Procedure.read",
+                "patient/Provenance.read",
+                "patient/QuestionnaireResponse.read",
+                "patient/RelatedPerson.read",
+                "patient/ServiceRequest.read",
+                "patient/Specimen.read"
+            ];
+
             function showScopeSelection() {
                 document.getElementById('serverInfo').innerHTML = `
                     <strong>🏥 ${config.name}</strong><br>
@@ -232,18 +266,18 @@
                     <div class="detail-line"><span class="label">Client Secret:</span> ${usePkce ? 'Not used in PKCE mode' : (config.clientSecret ? '✓ Configured' : '⚠ Not configured')}</div>
                 `;
 
-                const scopes = config.scope.split(' ').filter(s => s);
-                const checkboxes = scopes.map(scope => `
+                const configScopes = new Set(config.scope.split(' ').filter(s => s));
+                const checkboxes = ALL_SCOPES.map(scope => `
                     <label class="scope-checkbox-label">
-                        <input type="checkbox" class="scope-checkbox" value="${scope}" checked>
-                        <span class="scope-badge">${scope}</span>
+                        <input type="checkbox" class="scope-checkbox" value="${scope}"${configScopes.has(scope) ? ' checked' : ''}>
+                        <span class="scope-badge${configScopes.has(scope) ? '' : ' unchecked'}">${scope}</span>
                     </label>
                 `).join('');
 
                 document.getElementById('scopeSection').innerHTML = `
                     <div class="scope-selection">
                         <h3>Scopes to Request</h3>
-                        <p>Select the permissions to request from the authorization server.</p>
+                        <p>Pre-checked scopes are configured for this server. Check additional scopes to request them.</p>
                         <div class="scope-checkbox-list">${checkboxes}</div>
                         <button class="launch-btn" id="launchBtn" onclick="launchWithSelectedScopes()">🚀 Launch</button>
                     </div>
