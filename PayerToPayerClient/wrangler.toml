@@ -1,0 +1,13 @@
+name = "p2p-smart-token-broker"
+main = "jwks-worker.js"
+compatibility_date = "2026-09-19"
+
+# Set JWKS_JSON, PAYER_CONFIG_JSON, and optionally ALLOWED_ORIGIN as Worker
+# secrets with `npx wrangler secret put <NAME>`; do not place them here.
+# Set REQUIRE_ACCESS_JWT=true when this Worker is protected by a Cloudflare
+# Access application policy.
+#
+# For payers requiring mTLS, upload the client certificate and add its ID:
+# [[mtls_certificates]]
+# binding = "MTLS_CERT"
+# certificate_id = "<certificate-id>"

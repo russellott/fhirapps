@@ -489,6 +489,19 @@
         localStorage.setItem('p2pConfig', JSON.stringify(config));
       },
 
+      removeLegacyPrivateKeys: function() {
+        var config = ConfigModule.getConfig();
+        if (!config || !Array.isArray(config.previousPayers)) return;
+        var changed = false;
+        config.previousPayers.forEach(function(payer) {
+          if (Object.prototype.hasOwnProperty.call(payer, 'privateKeyJwk')) {
+            delete payer.privateKeyJwk;
+            changed = true;
+          }
+        });
+        if (changed) ConfigModule.saveConfig(config);
+      },
+
       seedFromDefaults: function() {
         var previousPayers = Object.entries(FHIR_SERVERS).map(function(entry) {
           return Object.assign({}, entry[1], {
@@ -587,51 +600,8 @@
         }
       },
 
-      _base64UrlEncode: function(value) {
-        var bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
-        var binary = '';
-        for (var index = 0; index < bytes.length; index++) binary += String.fromCharCode(bytes[index]);
-        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      },
-
-      _createClientAssertion: async function(payer, audience) {
-        if (!payer.jwksUri || !payer.privateKeyJwk) {
-          throw new Error('private_key_jwt requires a JWKS URI and private signing key JWK');
-        }
-        var privateKeyJwk = JSON.parse(payer.privateKeyJwk);
-        var algorithm;
-        var signingAlgorithm;
-        if (privateKeyJwk.kty === 'RSA') {
-          algorithm = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-384' };
-          signingAlgorithm = 'RS384';
-        } else if (privateKeyJwk.kty === 'EC' && privateKeyJwk.crv === 'P-384') {
-          algorithm = { name: 'ECDSA', namedCurve: 'P-384' };
-          signingAlgorithm = 'ES384';
-        } else {
-          throw new Error('private_key_jwt requires an RSA key or P-384 EC key');
-        }
-        if (!privateKeyJwk.kid) throw new Error('private_key_jwt requires a signing key kid');
-        var now = Math.floor(Date.now() / 1000);
-        var header = { alg: signingAlgorithm, kid: privateKeyJwk.kid, typ: 'JWT', jku: payer.jwksUri };
-        var payload = { iss: payer.clientId, sub: payer.clientId, aud: audience, exp: now + 300, jti: crypto.randomUUID() };
-        var encodedHeader = ExchangeModule._base64UrlEncode(JSON.stringify(header));
-        var encodedPayload = ExchangeModule._base64UrlEncode(JSON.stringify(payload));
-        var signingInput = encodedHeader + '.' + encodedPayload;
-        var key = await crypto.subtle.importKey('jwk', privateKeyJwk, algorithm, false, ['sign']);
-        var signature = await crypto.subtle.sign(
-          privateKeyJwk.kty === 'RSA' ? algorithm : { name: 'ECDSA', hash: 'SHA-384' },
-          key,
-          new TextEncoder().encode(signingInput)
-        );
-        return signingInput + '.' + ExchangeModule._base64UrlEncode(new Uint8Array(signature));
-      },
-
-      _configureTokenAuthentication: async function(payer, tokenAudience, body, headers) {
-        if (payer.tokenAuthMethod === 'private_key_jwt') {
-          body.set('client_id', payer.clientId);
-          body.set('client_assertion_type', 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer');
-          body.set('client_assertion', await ExchangeModule._createClientAssertion(payer, tokenAudience));
-        } else if (payer.tokenAuthMethod === 'client_secret_basic') {
+      _configureTokenAuthentication: function(payer, body, headers) {
+        if (payer.tokenAuthMethod === 'client_secret_basic') {
           headers['Authorization'] = 'Basic ' + btoa(payer.clientId + ':' + payer.clientSecret);
         } else {
           body.set('client_id', payer.clientId);
@@ -639,7 +609,36 @@
         }
       },
 
+      _requestBrokerToken: async function(payer, scope, step, errorPrefix) {
+        try {
+          var brokerUrl = payer.tokenBrokerUrl.replace(/\/$/, '') + '/token';
+          var requestBody = { payerKey: payer.brokerPayerKey, scope: scope };
+          var request = { method: 'POST', url: brokerUrl, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) };
+          var response = await fetch(brokerUrl, {
+            method: 'POST',
+            headers: request.headers,
+            body: request.body,
+            referrerPolicy: 'no-referrer'
+          });
+          var responseBody = null;
+          try { responseBody = await response.json(); } catch (_) {}
+          DebugModule.appendEntry({ step: step, request: request, response: { status: response.status, body: responseBody } });
+          if (!response.ok) return { ok: false, data: null, error: errorPrefix + ': HTTP ' + response.status };
+          if (!responseBody || !responseBody.access_token) return { ok: false, data: null, error: 'Token response missing access_token' };
+          return { ok: true, data: responseBody, error: null };
+        } catch (err) {
+          return { ok: false, data: null, error: errorPrefix + ': ' + (err.message || String(err)) };
+        }
+      },
+
       _acquireSystemToken: async function(payer, newPayerConfig) {
+        var scope = payer.systemScope || ('system/*' + (payer.scopeSuffix || '.rs'));
+        if (payer.tokenAuthMethod === 'private_key_jwt') {
+          if (!payer.tokenBrokerUrl || !payer.brokerPayerKey) {
+            return { ok: false, data: null, error: 'private_key_jwt requires a configured token broker URL and broker payer key' };
+          }
+          return ExchangeModule._requestBrokerToken(payer, scope, 1, 'Token broker request failed');
+        }
         try {
           var tokenUrl = payer.tokenUrl;
           if (payer.useProxy && newPayerConfig.corsProxyUrl) {
@@ -647,9 +646,9 @@
           }
           var body = new URLSearchParams();
           body.set('grant_type', 'client_credentials');
-          body.set('scope', payer.systemScope || ('system/*' + (payer.scopeSuffix || '.rs')));
+          body.set('scope', scope);
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-          await ExchangeModule._configureTokenAuthentication(payer, payer.tokenUrl, body, headers);
+          ExchangeModule._configureTokenAuthentication(payer, body, headers);
           var reqData = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
             method: 'POST',
@@ -863,6 +862,16 @@
       },
 
       _acquireMemberToken: async function(payer, fhirId, newPayerConfig) {
+        var scope = 'patient/' + fhirId + (payer.scopeSuffix || '.rs');
+        if (payer.tokenAuthMethod === 'private_key_jwt') {
+          if (!payer.tokenBrokerUrl || !payer.brokerPayerKey) {
+            return { ok: false, data: null, error: 'Member-scoped token requires a configured token broker URL and broker payer key' };
+          }
+          var brokerToken = await ExchangeModule._requestBrokerToken(payer, scope, 3, 'Member-scoped token broker request failed');
+          return brokerToken.ok
+            ? { ok: true, data: { memberToken: brokerToken.data.access_token }, error: null }
+            : { ok: false, data: null, error: 'Member-scoped token not supported by this server — this Previous Payer\'s auth server may not support patient-scoped client credentials. Data retrieval cannot proceed.' };
+        }
         try {
           var tokenUrl = payer.tokenUrl;
           if (payer.useProxy && newPayerConfig.corsProxyUrl) {
@@ -870,9 +879,9 @@
           }
           var body = new URLSearchParams();
           body.set('grant_type', 'client_credentials');
-          body.set('scope', 'patient/' + fhirId + (payer.scopeSuffix || '.rs'));
+          body.set('scope', scope);
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-          await ExchangeModule._configureTokenAuthentication(payer, payer.tokenUrl, body, headers);
+          ExchangeModule._configureTokenAuthentication(payer, body, headers);
           var reqData3 = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
             method: 'POST',
@@ -1103,6 +1112,8 @@
       _exchangeMode: 'single',
       _singleMember: {},
       _bulkMembers: [],
+      _newPayerSmartConfiguration: null,
+      _editPayerSmartConfiguration: null,
       _resultsActiveTab: null,
       _resultsActiveIndex: 0,
       _resultsKeyHandler: null,
@@ -1313,7 +1324,7 @@
           html += field('first-name', 'First Name', 'text', member.firstName, true);
           html += field('last-name', 'Last Name', 'text', member.lastName, true);
           html += field('dob', 'Date of Birth', 'date', member.dateOfBirth, true);
-          html += '<div class="form-field"><label for="bulk-' + index + '-gender">Gender</label><select id="bulk-' + index + '-gender" class="form-input"><option value=""' + (!member.gender ? ' selected' : '') + '>Not provided</option><option value="male"' + (member.gender === 'male' ? ' selected' : '') + '>male</option><option value="female"' + (member.gender === 'female' ? ' selected' : '') + '>female</option><option value="other"' + (member.gender === 'other' ? ' selected' : '') + '>other</option><option value="unknown"' + (member.gender === 'unknown' ? ' selected' : '') + '>unknown</option></select></div>';
+          html += '<div class="form-field"><label for="bulk-' + index + '-gender">Gender<span class="required-marker" aria-hidden="true">*</span></label><select id="bulk-' + index + '-gender" class="form-input" required><option value=""' + (!member.gender ? ' selected' : '') + ' disabled>Select gender</option><option value="male"' + (member.gender === 'male' ? ' selected' : '') + '>male</option><option value="female"' + (member.gender === 'female' ? ' selected' : '') + '>female</option><option value="other"' + (member.gender === 'other' ? ' selected' : '') + '>other</option><option value="unknown"' + (member.gender === 'unknown' ? ' selected' : '') + '>unknown</option></select></div>';
           html += field('identifier-system', 'Patient Identifier System', 'url', member.identifierSystem, false);
           html += field('identifier-value', 'Patient Identifier Value', 'text', member.identifierValue, true);
           html += field('subscriber-id', 'Coverage Subscriber ID', 'text', member.subscriberId, true);
@@ -1338,7 +1349,7 @@
         html += field('first-name', 'First Name', 'text', member.firstName, true);
         html += field('last-name', 'Last Name', 'text', member.lastName, true);
         html += field('dob', 'Date of Birth', 'date', member.dateOfBirth, true);
-        html += '<div class="form-field"><label for="single-gender">Gender</label><select id="single-gender" class="form-input"><option value=""' + (!member.gender ? ' selected' : '') + '>Not provided</option><option value="male"' + (member.gender === 'male' ? ' selected' : '') + '>male</option><option value="female"' + (member.gender === 'female' ? ' selected' : '') + '>female</option><option value="other"' + (member.gender === 'other' ? ' selected' : '') + '>other</option><option value="unknown"' + (member.gender === 'unknown' ? ' selected' : '') + '>unknown</option></select></div>';
+        html += '<div class="form-field"><label for="single-gender">Gender<span class="required-marker" aria-hidden="true">*</span></label><select id="single-gender" class="form-input" required><option value=""' + (!member.gender ? ' selected' : '') + ' disabled>Select gender</option><option value="male"' + (member.gender === 'male' ? ' selected' : '') + '>male</option><option value="female"' + (member.gender === 'female' ? ' selected' : '') + '>female</option><option value="other"' + (member.gender === 'other' ? ' selected' : '') + '>other</option><option value="unknown"' + (member.gender === 'unknown' ? ' selected' : '') + '>unknown</option></select></div>';
         html += field('identifier-system', 'Patient Identifier System', 'url', member.identifierSystem, false);
         html += field('identifier-value', 'Patient Identifier Value', 'text', member.identifierValue, true);
         html += field('subscriber-id', 'Coverage Subscriber ID', 'text', member.subscriberId, true);
@@ -1523,7 +1534,32 @@
 
       showAddPayer: function() {
         UIModule._expandedPayerId = 'new';
+        UIModule._newPayerSmartConfiguration = null;
         UIModule.showView('previous-payers');
+      },
+
+      discoverSmartConfiguration: async function(fhirBaseUrl) {
+        var baseUrl = (fhirBaseUrl || '').trim().replace(/\/$/, '');
+        if (!baseUrl) throw new Error('Enter a FHIR Base URL first');
+        var response = await fetch(baseUrl + '/.well-known/smart-configuration', {
+          headers: { 'Accept': 'application/json' },
+          referrerPolicy: 'no-referrer'
+        });
+        if (!response.ok) throw new Error('SMART configuration request failed: HTTP ' + response.status);
+        var configuration = await response.json();
+        var authMethods = Array.isArray(configuration.token_endpoint_auth_methods_supported) ? configuration.token_endpoint_auth_methods_supported : [];
+        var signingAlgorithms = Array.isArray(configuration.token_endpoint_auth_signing_alg_values_supported) ? configuration.token_endpoint_auth_signing_alg_values_supported : [];
+        if (!configuration.token_endpoint) throw new Error('SMART configuration is missing token_endpoint');
+        if (authMethods.indexOf('private_key_jwt') === -1) throw new Error('Server does not advertise private_key_jwt');
+        if (signingAlgorithms.indexOf('RS384') === -1 && signingAlgorithms.indexOf('ES384') === -1) {
+          throw new Error('Server does not advertise RS384 or ES384 signing support');
+        }
+        return {
+          tokenEndpoint: configuration.token_endpoint,
+          authMethods: authMethods,
+          signingAlgorithms: signingAlgorithms,
+          scopes: Array.isArray(configuration.scopes_supported) ? configuration.scopes_supported : []
+        };
       },
 
       renderNewPayerForm: function() {
@@ -1544,6 +1580,11 @@
         html += '<input id="np-fhir-url" class="form-input" type="url" autocomplete="off">';
         html += '<div id="np-fhir-url-error" class="field-error"></div>';
         html += '</div>';
+
+        html += '<div class="form-actions">';
+        html += '<button id="np-discover-smart" class="btn btn-secondary" type="button">Discover SMART Configuration</button>';
+        html += '</div>';
+        html += '<div id="np-smart-discovery-status" class="field-error"></div>';
 
         html += '<div class="form-field">';
         html += '<label for="np-token-url">Token URL<span class="required-marker" aria-hidden="true">*</span></label>';
@@ -1582,9 +1623,15 @@
         html += '</div>';
 
         html += '<div class="form-field">';
-        html += '<label for="np-private-key-jwk">Private Signing Key JWK</label>';
-        html += '<textarea id="np-private-key-jwk" class="form-input" rows="5" placeholder="Test environments only: private JWK JSON" autocomplete="off"></textarea>';
-        html += '<div id="np-private-key-jwk-error" class="field-error"></div>';
+        html += '<label for="np-token-broker-url">Token Broker URL</label>';
+        html += '<input id="np-token-broker-url" class="form-input" type="url" placeholder="https://worker.example.org" autocomplete="off">';
+        html += '<div id="np-token-broker-url-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-broker-payer-key">Broker Payer Key</label>';
+        html += '<input id="np-broker-payer-key" class="form-input" type="text" autocomplete="off">';
+        html += '<div id="np-broker-payer-key-error" class="field-error"></div>';
         html += '</div>';
 
         html += '<div class="form-field">';
@@ -1724,6 +1771,11 @@
           html += '<div id="ep-fhir-url-error" class="field-error"></div>';
           html += '</div>';
 
+          html += '<div class="form-actions">';
+          html += '<button id="ep-discover-smart" class="btn btn-secondary" type="button">Discover SMART Configuration</button>';
+          html += '</div>';
+          html += '<div id="ep-smart-discovery-status" class="field-error"></div>';
+
           html += '<div class="form-field">';
           html += '<label for="ep-token-url">Token URL<span class="required-marker" aria-hidden="true">*</span></label>';
           html += '<input id="ep-token-url" class="form-input" type="url" value="' + UIModule.escapeHtml(payer.tokenUrl || '') + '" autocomplete="off">';
@@ -1761,9 +1813,15 @@
           html += '</div>';
 
           html += '<div class="form-field">';
-          html += '<label for="ep-private-key-jwk">Private Signing Key JWK</label>';
-          html += '<textarea id="ep-private-key-jwk" class="form-input" rows="5" placeholder="Test environments only: private JWK JSON" autocomplete="off">' + UIModule.escapeHtml(payer.privateKeyJwk || '') + '</textarea>';
-          html += '<div id="ep-private-key-jwk-error" class="field-error"></div>';
+          html += '<label for="ep-token-broker-url">Token Broker URL</label>';
+          html += '<input id="ep-token-broker-url" class="form-input" type="url" value="' + UIModule.escapeHtml(payer.tokenBrokerUrl || '') + '" placeholder="https://worker.example.org" autocomplete="off">';
+          html += '<div id="ep-token-broker-url-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-broker-payer-key">Broker Payer Key</label>';
+          html += '<input id="ep-broker-payer-key" class="form-input" type="text" value="' + UIModule.escapeHtml(payer.brokerPayerKey || '') + '" autocomplete="off">';
+          html += '<div id="ep-broker-payer-key-error" class="field-error"></div>';
           html += '</div>';
 
           html += '<div class="form-field">';
@@ -1880,6 +1938,27 @@
             });
           }
 
+          var newDiscoverBtn = document.getElementById('np-discover-smart');
+          if (newDiscoverBtn) {
+            newDiscoverBtn.addEventListener('click', async function() {
+              var status = document.getElementById('np-smart-discovery-status');
+              newDiscoverBtn.disabled = true;
+              if (status) { status.textContent = 'Retrieving SMART configuration...'; status.classList.add('visible'); status.style.color = 'var(--color-text-secondary)'; }
+              try {
+                var smartConfiguration = await UIModule.discoverSmartConfiguration(document.getElementById('np-fhir-url').value);
+                UIModule._newPayerSmartConfiguration = smartConfiguration;
+                document.getElementById('np-token-url').value = smartConfiguration.tokenEndpoint;
+                document.getElementById('np-auth-method').value = 'private_key_jwt';
+                if (status) { status.textContent = 'Supports private_key_jwt with ' + smartConfiguration.signingAlgorithms.join(', ') + '.'; status.style.color = 'var(--color-success)'; }
+              } catch (err) {
+                UIModule._newPayerSmartConfiguration = null;
+                if (status) { status.textContent = err.message || String(err); status.style.color = 'var(--color-error)'; }
+              } finally {
+                newDiscoverBtn.disabled = false;
+              }
+            });
+          }
+
           var saveBtn = document.getElementById('new-payer-save');
           if (saveBtn) {
             saveBtn.addEventListener('click', function() {
@@ -1920,17 +1999,21 @@
 
               if (newAuthMethod === 'private_key_jwt') {
                 var newJwksUri = document.getElementById('np-jwks-uri');
-                var newPrivateKeyJwk = document.getElementById('np-private-key-jwk');
-                try { JSON.parse(newPrivateKeyJwk.value.trim()); } catch (_) { newPrivateKeyJwk.classList.add('invalid'); document.getElementById('np-private-key-jwk-error').textContent = 'Enter a private JWK JSON object'; document.getElementById('np-private-key-jwk-error').classList.add('visible'); return; }
+                var newTokenBrokerUrl = document.getElementById('np-token-broker-url');
+                var newBrokerPayerKey = document.getElementById('np-broker-payer-key');
                 if (!newJwksUri.value.trim()) { newJwksUri.classList.add('invalid'); document.getElementById('np-jwks-uri-error').textContent = 'Required for private_key_jwt'; document.getElementById('np-jwks-uri-error').classList.add('visible'); return; }
+                if (!newTokenBrokerUrl.value.trim()) { newTokenBrokerUrl.classList.add('invalid'); document.getElementById('np-token-broker-url-error').textContent = 'Required for private_key_jwt'; document.getElementById('np-token-broker-url-error').classList.add('visible'); return; }
+                if (!newBrokerPayerKey.value.trim()) { newBrokerPayerKey.classList.add('invalid'); document.getElementById('np-broker-payer-key-error').textContent = 'Required for private_key_jwt'; document.getElementById('np-broker-payer-key-error').classList.add('visible'); return; }
               }
 
               values.tokenAuthMethod = newAuthMethod;
               values.clientSecret = document.getElementById('np-secret').value.trim();
               values.jwksUri = document.getElementById('np-jwks-uri').value.trim();
-              values.privateKeyJwk = document.getElementById('np-private-key-jwk').value.trim();
+              values.tokenBrokerUrl = document.getElementById('np-token-broker-url').value.trim();
+              values.brokerPayerKey = document.getElementById('np-broker-payer-key').value.trim();
               values.redirectUris = document.getElementById('np-redirect-uris').value.split(/\r?\n/).map(function(uri) { return uri.trim(); }).filter(function(uri) { return !!uri; });
               values.useProxy = document.getElementById('np-use-proxy').checked;
+              if (UIModule._newPayerSmartConfiguration) values.smartConfiguration = UIModule._newPayerSmartConfiguration;
 
               ConfigModule.addPayer(values);
               UIModule._expandedPayerId = null;
@@ -1953,6 +2036,27 @@
                 inp.type = 'password';
                 epToggleBtn.textContent = 'Show';
                 epToggleBtn.setAttribute('aria-label', 'Show client secret');
+              }
+            });
+          }
+
+          var editDiscoverBtn = document.getElementById('ep-discover-smart');
+          if (editDiscoverBtn) {
+            editDiscoverBtn.addEventListener('click', async function() {
+              var status = document.getElementById('ep-smart-discovery-status');
+              editDiscoverBtn.disabled = true;
+              if (status) { status.textContent = 'Retrieving SMART configuration...'; status.classList.add('visible'); status.style.color = 'var(--color-text-secondary)'; }
+              try {
+                var smartConfiguration = await UIModule.discoverSmartConfiguration(document.getElementById('ep-fhir-url').value);
+                UIModule._editPayerSmartConfiguration = smartConfiguration;
+                document.getElementById('ep-token-url').value = smartConfiguration.tokenEndpoint;
+                document.getElementById('ep-auth-method').value = 'private_key_jwt';
+                if (status) { status.textContent = 'Supports private_key_jwt with ' + smartConfiguration.signingAlgorithms.join(', ') + '.'; status.style.color = 'var(--color-success)'; }
+              } catch (err) {
+                UIModule._editPayerSmartConfiguration = null;
+                if (status) { status.textContent = err.message || String(err); status.style.color = 'var(--color-error)'; }
+              } finally {
+                editDiscoverBtn.disabled = false;
               }
             });
           }
@@ -2005,17 +2109,21 @@
 
               if (editAuthMethod === 'private_key_jwt') {
                 var editJwksUri = document.getElementById('ep-jwks-uri');
-                var editPrivateKeyJwk = document.getElementById('ep-private-key-jwk');
-                try { JSON.parse(editPrivateKeyJwk.value.trim()); } catch (_) { editPrivateKeyJwk.classList.add('invalid'); document.getElementById('ep-private-key-jwk-error').textContent = 'Enter a private JWK JSON object'; document.getElementById('ep-private-key-jwk-error').classList.add('visible'); return; }
+                var editTokenBrokerUrl = document.getElementById('ep-token-broker-url');
+                var editBrokerPayerKey = document.getElementById('ep-broker-payer-key');
                 if (!editJwksUri.value.trim()) { editJwksUri.classList.add('invalid'); document.getElementById('ep-jwks-uri-error').textContent = 'Required for private_key_jwt'; document.getElementById('ep-jwks-uri-error').classList.add('visible'); return; }
+                if (!editTokenBrokerUrl.value.trim()) { editTokenBrokerUrl.classList.add('invalid'); document.getElementById('ep-token-broker-url-error').textContent = 'Required for private_key_jwt'; document.getElementById('ep-token-broker-url-error').classList.add('visible'); return; }
+                if (!editBrokerPayerKey.value.trim()) { editBrokerPayerKey.classList.add('invalid'); document.getElementById('ep-broker-payer-key-error').textContent = 'Required for private_key_jwt'; document.getElementById('ep-broker-payer-key-error').classList.add('visible'); return; }
               }
 
               values.tokenAuthMethod = editAuthMethod;
               values.clientSecret = document.getElementById('ep-secret').value.trim();
               values.jwksUri = document.getElementById('ep-jwks-uri').value.trim();
-              values.privateKeyJwk = document.getElementById('ep-private-key-jwk').value.trim();
+              values.tokenBrokerUrl = document.getElementById('ep-token-broker-url').value.trim();
+              values.brokerPayerKey = document.getElementById('ep-broker-payer-key').value.trim();
               values.redirectUris = document.getElementById('ep-redirect-uris').value.split(/\r?\n/).map(function(uri) { return uri.trim(); }).filter(function(uri) { return !!uri; });
               values.useProxy = document.getElementById('ep-use-proxy').checked;
+              if (UIModule._editPayerSmartConfiguration) values.smartConfiguration = UIModule._editPayerSmartConfiguration;
 
               ConfigModule.updatePayer(UIModule._expandedPayerId, values);
               UIModule._expandedPayerId = null;
@@ -2237,7 +2345,7 @@
             if (!config || !Array.isArray(config.previousPayers)) return;
             var payer = config.previousPayers.find(function(p) { return p.id === UIModule._exchangeSelectedPayerId; });
             var member = captureSingleMember();
-            var requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'identifierValue', 'subscriberId'];
+            var requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'identifierValue', 'subscriberId'];
             var valid = requiredFields.every(function(field) { return !!member[field]; }) &&
               (!member.coverageStart || !member.coverageEnd || member.coverageStart <= member.coverageEnd) &&
               (!member.consentStart || !member.consentEnd || member.consentStart <= member.consentEnd);
@@ -2275,7 +2383,7 @@
           runBulkBtn.addEventListener('click', function() {
             captureBulkMembers();
             var members = UIModule._bulkMembers;
-            var requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'identifierValue', 'subscriberId', 'consentStart', 'consentEnd'];
+            var requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'gender', 'identifierValue', 'subscriberId', 'consentStart', 'consentEnd'];
             var valid = members.length > 0 && members.every(function(member) {
               return requiredFields.every(function(field) { return !!member[field]; }) && member.consentStart <= member.consentEnd && (!member.coverageStart || !member.coverageEnd || member.coverageStart <= member.coverageEnd);
             });
@@ -2584,6 +2692,7 @@
         if (!ConfigModule.getConfig()) {
           ConfigModule.seedFromDefaults();
         }
+        ConfigModule.removeLegacyPrivateKeys();
         this.bindEvents();
         this.updateNewPayerChip();
         this.showView('previous-payers');
