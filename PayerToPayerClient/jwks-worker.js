@@ -86,8 +86,12 @@ async function createClientAssertion(payer) {
 }
 
 function isAllowedScope(payer, scope) {
-  if (Array.isArray(payer.systemScopes) && payer.systemScopes.indexOf(scope) !== -1) return true;
-  return payer.allowPatientScopes === true && /^patient\/[A-Za-z0-9\-.]+\.(rs|read)$/.test(scope);
+  var requestedScopes = String(scope || '').trim().split(/\s+/).filter(function(item) { return item; });
+  if (requestedScopes.length === 0) return false;
+  return requestedScopes.every(function(requestedScope) {
+    if (Array.isArray(payer.systemScopes) && payer.systemScopes.indexOf(requestedScope) !== -1) return true;
+    return payer.allowPatientScopes === true && /^patient\/[A-Za-z0-9\-.]+\.(rs|read)$/.test(requestedScope);
+  });
 }
 
 function getOutboundFetcher(payer, env) {

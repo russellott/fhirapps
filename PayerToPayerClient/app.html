@@ -632,7 +632,7 @@
       },
 
       _acquireSystemToken: async function(payer, newPayerConfig) {
-        var scope = payer.systemScope || ('system/*' + (payer.scopeSuffix || '.rs'));
+        var scope = payer.systemScope || (Array.isArray(payer.systemScopes) && payer.systemScopes.length ? payer.systemScopes[0] : ('system/*' + (payer.scopeSuffix || '.rs')));
         if (payer.tokenAuthMethod === 'private_key_jwt') {
           if (!payer.tokenBrokerUrl || !payer.brokerPayerKey) {
             return { ok: false, data: null, error: 'private_key_jwt requires a configured token broker URL and broker payer key' };
@@ -862,6 +862,9 @@
       },
 
       _acquireMemberToken: async function(payer, fhirId, newPayerConfig) {
+        if (payer.allowPatientScopes === false) {
+          return { ok: false, data: null, error: 'Patient-scoped token requests are disabled for this Previous Payer.' };
+        }
         var scope = 'patient/' + fhirId + (payer.scopeSuffix || '.rs');
         if (payer.tokenAuthMethod === 'private_key_jwt') {
           if (!payer.tokenBrokerUrl || !payer.brokerPayerKey) {
@@ -1617,6 +1620,18 @@
         html += '</div>';
 
         html += '<div class="form-field">';
+        html += '<label for="np-system-scope">System Scopes<span class="required-marker" aria-hidden="true">*</span></label>';
+        html += '<input id="np-system-scope" class="form-input" type="text" value="system/*.rs" placeholder="system/*.rs" autocomplete="off">';
+        html += '<div class="field-help">Space-separated scopes requested from this Previous Payer.</div>';
+        html += '<div id="np-system-scope-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-check-row">';
+        html += '<input type="checkbox" id="np-allow-patient-scopes" checked>';
+        html += '<label for="np-allow-patient-scopes">Allow patient-scoped token requests</label>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
         html += '<label for="np-jwks-uri">JWKS URI</label>';
         html += '<input id="np-jwks-uri" class="form-input" type="url" placeholder="https://client.example.org/jwks.json" autocomplete="off">';
         html += '<div id="np-jwks-uri-error" class="field-error"></div>';
@@ -1807,6 +1822,18 @@
           html += '</div>';
 
           html += '<div class="form-field">';
+          html += '<label for="ep-system-scope">System Scopes<span class="required-marker" aria-hidden="true">*</span></label>';
+          html += '<input id="ep-system-scope" class="form-input" type="text" value="' + UIModule.escapeHtml(payer.systemScope || (Array.isArray(payer.systemScopes) && payer.systemScopes.length ? payer.systemScopes[0] : 'system/*.rs')) + '" placeholder="system/*.rs" autocomplete="off">';
+          html += '<div class="field-help">Space-separated scopes requested from this Previous Payer.</div>';
+          html += '<div id="ep-system-scope-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-check-row">';
+          html += '<input type="checkbox" id="ep-allow-patient-scopes"' + (payer.allowPatientScopes !== false ? ' checked' : '') + '>';
+          html += '<label for="ep-allow-patient-scopes">Allow patient-scoped token requests</label>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
           html += '<label for="ep-jwks-uri">JWKS URI</label>';
           html += '<input id="ep-jwks-uri" class="form-input" type="url" value="' + UIModule.escapeHtml(payer.jwksUri || '') + '" placeholder="https://client.example.org/jwks.json" autocomplete="off">';
           html += '<div id="ep-jwks-uri-error" class="field-error"></div>';
@@ -1966,7 +1993,8 @@
                 { inputId: 'np-name',      errorId: 'np-name-error',      key: 'name' },
                 { inputId: 'np-fhir-url',  errorId: 'np-fhir-url-error',  key: 'fhirBaseUrl' },
                 { inputId: 'np-token-url', errorId: 'np-token-url-error', key: 'tokenUrl' },
-                { inputId: 'np-client-id', errorId: 'np-client-id-error', key: 'clientId' }
+                { inputId: 'np-client-id', errorId: 'np-client-id-error', key: 'clientId' },
+                { inputId: 'np-system-scope', errorId: 'np-system-scope-error', key: 'systemScope' }
               ];
               var newAuthMethod = document.getElementById('np-auth-method').value;
               if (newAuthMethod !== 'private_key_jwt') fields.push({ inputId: 'np-secret', errorId: 'np-secret-error', key: 'clientSecret' });
@@ -2007,6 +2035,8 @@
               }
 
               values.tokenAuthMethod = newAuthMethod;
+              values.systemScopes = values.systemScope.split(/\s+/).filter(function(scope) { return !!scope; });
+              values.allowPatientScopes = document.getElementById('np-allow-patient-scopes').checked;
               values.clientSecret = document.getElementById('np-secret').value.trim();
               values.jwksUri = document.getElementById('np-jwks-uri').value.trim();
               values.tokenBrokerUrl = document.getElementById('np-token-broker-url').value.trim();
@@ -2076,7 +2106,8 @@
                 { inputId: 'ep-name',      errorId: 'ep-name-error',      key: 'name' },
                 { inputId: 'ep-fhir-url',  errorId: 'ep-fhir-url-error',  key: 'fhirBaseUrl' },
                 { inputId: 'ep-token-url', errorId: 'ep-token-url-error', key: 'tokenUrl' },
-                { inputId: 'ep-client-id', errorId: 'ep-client-id-error', key: 'clientId' }
+                { inputId: 'ep-client-id', errorId: 'ep-client-id-error', key: 'clientId' },
+                { inputId: 'ep-system-scope', errorId: 'ep-system-scope-error', key: 'systemScope' }
               ];
               var editAuthMethod = document.getElementById('ep-auth-method').value;
               if (editAuthMethod !== 'private_key_jwt') epFields.push({ inputId: 'ep-secret', errorId: 'ep-secret-error', key: 'clientSecret' });
@@ -2117,6 +2148,8 @@
               }
 
               values.tokenAuthMethod = editAuthMethod;
+              values.systemScopes = values.systemScope.split(/\s+/).filter(function(scope) { return !!scope; });
+              values.allowPatientScopes = document.getElementById('ep-allow-patient-scopes').checked;
               values.clientSecret = document.getElementById('ep-secret').value.trim();
               values.jwksUri = document.getElementById('ep-jwks-uri').value.trim();
               values.tokenBrokerUrl = document.getElementById('ep-token-broker-url').value.trim();
