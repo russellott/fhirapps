@@ -8,3 +8,10 @@ CLAUDE.md
 **/.bmad/
 **/_bmad-output/
 **/.claude/skills/bmad-*/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
