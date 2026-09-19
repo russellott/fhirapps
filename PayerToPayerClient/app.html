@@ -376,6 +376,18 @@
     .exchange-form-row label { font-weight: 500; font-size: 14px; }
     .exchange-select { width: 100%; max-width: 360px; }
     .exchange-summary { font-style: italic; color: var(--color-text-secondary); min-height: 1.4em; margin: 12px 0; }
+    .exchange-mode-toggle { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); }
+    .exchange-mode-btn { background: none; border: none; border-bottom: 2px solid transparent; color: var(--color-text-secondary); cursor: pointer; font-size: 14px; font-weight: 500; margin-bottom: -1px; padding: 10px 14px; }
+    .exchange-mode-btn.active { border-bottom-color: var(--color-primary); color: var(--color-primary); }
+    .bulk-member-list { display: flex; flex-direction: column; gap: 12px; margin: 16px 0; }
+    .bulk-member-form { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 8px; padding: 16px; }
+    .bulk-member-header { align-items: center; display: flex; justify-content: space-between; margin-bottom: 12px; }
+    .bulk-member-header h3 { font-size: 15px; font-weight: 600; }
+    .bulk-member-fields { display: grid; gap: 10px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .bulk-member-fields .form-field { min-width: 0; }
+    .bulk-member-fields .form-field.full-width { grid-column: 1 / -1; }
+    .bulk-member-actions { display: flex; gap: 8px; margin-top: 16px; }
+    @media (max-width: 600px) { .bulk-member-fields { grid-template-columns: 1fr; } }
     .step-tracker { display: flex; flex-direction: column; gap: 16px; padding: 16px 0; }
     .step-row { display: flex; align-items: center; gap: 12px; }
     .step-icon { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; }
@@ -575,6 +587,58 @@
         }
       },
 
+      _base64UrlEncode: function(value) {
+        var bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+        var binary = '';
+        for (var index = 0; index < bytes.length; index++) binary += String.fromCharCode(bytes[index]);
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      },
+
+      _createClientAssertion: async function(payer, audience) {
+        if (!payer.jwksUri || !payer.privateKeyJwk) {
+          throw new Error('private_key_jwt requires a JWKS URI and private signing key JWK');
+        }
+        var privateKeyJwk = JSON.parse(payer.privateKeyJwk);
+        var algorithm;
+        var signingAlgorithm;
+        if (privateKeyJwk.kty === 'RSA') {
+          algorithm = { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-384' };
+          signingAlgorithm = 'RS384';
+        } else if (privateKeyJwk.kty === 'EC' && privateKeyJwk.crv === 'P-384') {
+          algorithm = { name: 'ECDSA', namedCurve: 'P-384' };
+          signingAlgorithm = 'ES384';
+        } else {
+          throw new Error('private_key_jwt requires an RSA key or P-384 EC key');
+        }
+        if (!privateKeyJwk.kid) throw new Error('private_key_jwt requires a signing key kid');
+        var now = Math.floor(Date.now() / 1000);
+        var header = { alg: signingAlgorithm, kid: privateKeyJwk.kid, typ: 'JWT', jku: payer.jwksUri };
+        var payload = { iss: payer.clientId, sub: payer.clientId, aud: audience, exp: now + 300, jti: crypto.randomUUID() };
+        var encodedHeader = ExchangeModule._base64UrlEncode(JSON.stringify(header));
+        var encodedPayload = ExchangeModule._base64UrlEncode(JSON.stringify(payload));
+        var signingInput = encodedHeader + '.' + encodedPayload;
+        var key = await crypto.subtle.importKey('jwk', privateKeyJwk, algorithm, false, ['sign']);
+        var signature = await crypto.subtle.sign(
+          privateKeyJwk.kty === 'RSA' ? algorithm : { name: 'ECDSA', hash: 'SHA-384' },
+          key,
+          new TextEncoder().encode(signingInput)
+        );
+        return signingInput + '.' + ExchangeModule._base64UrlEncode(new Uint8Array(signature));
+      },
+
+      _configureTokenAuthentication: async function(payer, tokenAudience, body, headers) {
+        if (payer.tokenAuthMethod === 'private_key_jwt') {
+          body.set('client_id', payer.clientId);
+          body.set('client_assertion_type', 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer');
+          body.set('client_assertion', await ExchangeModule._createClientAssertion(payer, tokenAudience));
+        } else if (payer.tokenAuthMethod === 'client_secret_basic') {
+          headers['Authorization'] = 'Basic ' + btoa(payer.clientId + ':' + payer.clientSecret);
+        } else {
+          body.set('client_id', payer.clientId);
+          body.set('client_secret', payer.clientSecret);
+        }
+      },
+
       _acquireSystemToken: async function(payer, newPayerConfig) {
         try {
           var tokenUrl = payer.tokenUrl;
@@ -585,12 +649,7 @@
           body.set('grant_type', 'client_credentials');
           body.set('scope', payer.systemScope || ('system/*' + (payer.scopeSuffix || '.rs')));
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-          if (payer.tokenAuthMethod === 'client_secret_basic') {
-            headers['Authorization'] = 'Basic ' + btoa(payer.clientId + ':' + payer.clientSecret);
-          } else {
-            body.set('client_id', payer.clientId);
-            body.set('client_secret', payer.clientSecret);
-          }
+          await ExchangeModule._configureTokenAuthentication(payer, payer.tokenUrl, body, headers);
           var reqData = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
             method: 'POST',
@@ -622,58 +681,7 @@
           if (payer.useProxy && newPayerConfig.corsProxyUrl) {
             matchUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(matchUrl);
           }
-          var now = new Date().toISOString();
-          var fiveYearsAgo = new Date(Date.now() - 5 * 365.25 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-          var parametersBody = {
-            resourceType: 'Parameters',
-            parameter: [
-              {
-                name: 'MemberPatient',
-                resource: {
-                  resourceType: 'Patient',
-                  name: [{ family: member.lastName, given: [member.firstName] }],
-                  birthDate: member.dateOfBirth,
-                  gender: member.gender
-                }
-              },
-              {
-                name: 'CoverageToMatch',
-                resource: {
-                  resourceType: 'Coverage',
-                  status: 'active',
-                  subscriberId: member.memberIdAtOldPayer,
-                  beneficiary: { display: member.firstName + ' ' + member.lastName },
-                  payor: [{ display: payer.name }]
-                }
-              },
-              {
-                name: 'CoverageToLink',
-                resource: {
-                  resourceType: 'Coverage',
-                  status: 'active',
-                  beneficiary: { display: member.firstName + ' ' + member.lastName },
-                  payor: [{ display: newPayerConfig.newPayer ? newPayerConfig.newPayer.name : '' }]
-                }
-              },
-              {
-                name: 'Consent',
-                resource: {
-                  resourceType: 'Consent',
-                  status: 'active',
-                  scope: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/consentscope', code: 'patient-privacy' }] },
-                  category: [{ coding: [{ system: 'http://loinc.org', code: '59284-0' }] }],
-                  dateTime: now,
-                  performer: [{ display: newPayerConfig.newPayer ? newPayerConfig.newPayer.name : '' }],
-                  organization: [{ display: payer.name }],
-                  provision: {
-                    type: 'permit',
-                    period: { start: fiveYearsAgo, end: now.slice(0, 10) },
-                    purpose: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-ActReason', code: 'TREAT' }]
-                  }
-                }
-              }
-            ]
-          };
+          var parametersBody = ExchangeModule._buildMemberMatchParameters(payer, member, newPayerConfig);
           var reqData2 = { method: 'POST', url: matchUrl, headers: { 'Authorization': 'Bearer ' + systemToken, 'Content-Type': 'application/fhir+json' }, body: JSON.stringify(parametersBody) };
           var response = await fetch(matchUrl, {
             method: 'POST',
@@ -689,7 +697,7 @@
             if (code === 'consent') {
               return { ok: false, data: null, error: 'Consent denied by Previous Payer. Verify Consent resource construction.' };
             }
-            return { ok: false, data: null, error: 'Member not found at Previous Payer — check demographics or member ID. Submitted: ' + member.firstName + ' ' + member.lastName + ', DOB ' + member.dateOfBirth + ', Member ID ' + member.memberIdAtOldPayer + '.' };
+            return { ok: false, data: null, error: 'Member not found at Previous Payer — check demographics or member ID. Submitted: ' + member.firstName + ' ' + member.lastName + ', DOB ' + member.dateOfBirth + ', Member ID ' + (member.subscriberId || member.memberIdAtOldPayer) + '.' };
           }
           if (!response.ok) {
             DebugModule.appendEntry({ step: 2, request: reqData2, response: { status: response.status, body: null } });
@@ -709,6 +717,151 @@
         }
       },
 
+      _buildMemberMatchParameters: function(payer, member, newPayerConfig) {
+        var now = new Date().toISOString();
+        var fiveYearsAgo = member.consentStart || new Date(Date.now() - 5 * 365.25 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        var consentEnd = member.consentEnd || now.slice(0, 10);
+        var patient = {
+          resourceType: 'Patient',
+          name: [{ family: member.lastName, given: [member.firstName] }],
+          birthDate: member.dateOfBirth
+        };
+        if (member.gender) patient.gender = member.gender;
+        if (member.identifierValue) {
+          patient.identifier = [{ value: member.identifierValue }];
+          if (member.identifierSystem) patient.identifier[0].system = member.identifierSystem;
+        }
+        var coverage = {
+          resourceType: 'Coverage',
+          status: 'active',
+          subscriberId: member.subscriberId || member.memberIdAtOldPayer,
+          beneficiary: { display: member.firstName + ' ' + member.lastName },
+          payor: [{ display: payer.name }]
+        };
+        if (member.coverageStart || member.coverageEnd) {
+          coverage.period = {};
+          if (member.coverageStart) coverage.period.start = member.coverageStart;
+          if (member.coverageEnd) coverage.period.end = member.coverageEnd;
+        }
+        return {
+          resourceType: 'Parameters',
+          parameter: [
+            {
+              name: 'MemberPatient',
+              resource: patient
+            },
+            {
+              name: 'CoverageToMatch',
+              resource: coverage
+            },
+            {
+              name: 'CoverageToLink',
+              resource: {
+                resourceType: 'Coverage',
+                status: 'active',
+                beneficiary: { display: member.firstName + ' ' + member.lastName },
+                payor: [{ display: newPayerConfig.newPayer ? newPayerConfig.newPayer.name : '' }]
+              }
+            },
+            {
+              name: 'Consent',
+              resource: {
+                resourceType: 'Consent',
+                status: 'active',
+                scope: { coding: [{ system: 'http://terminology.hl7.org/CodeSystem/consentscope', code: 'patient-privacy' }] },
+                category: [{ coding: [{ system: 'http://loinc.org', code: '59284-0' }] }],
+                dateTime: now,
+                sourceReference: { reference: 'http://example.org/DocumentReference/consent-source' },
+                performer: [{ display: newPayerConfig.newPayer ? newPayerConfig.newPayer.name : '' }],
+                organization: [{ display: payer.name }],
+                provision: {
+                  type: 'permit',
+                    period: { start: fiveYearsAgo, end: consentEnd },
+                  purpose: [{ system: 'http://terminology.hl7.org/CodeSystem/v3-ActReason', code: 'TREAT' }]
+                }
+              }
+            }
+          ]
+        };
+      },
+
+      _runBulkMemberMatch: async function(payer, members, systemToken, newPayerConfig) {
+        if (!Array.isArray(members) || members.length === 0) {
+          return { ok: false, data: null, error: 'Bulk member match requires at least one member' };
+        }
+        try {
+          var matchUrl = payer.fhirBaseUrl + '/Patient/$bulk-member-match';
+          if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+            matchUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(matchUrl);
+          }
+          var requestBody = {
+            resourceType: 'Bundle',
+            type: 'collection',
+            entry: members.map(function(member) {
+              return { resource: ExchangeModule._buildMemberMatchParameters(payer, member, newPayerConfig) };
+            })
+          };
+          var headers = {
+            'Authorization': 'Bearer ' + systemToken,
+            'Content-Type': 'application/fhir+json',
+            'Accept': 'application/fhir+json',
+            'Prefer': 'respond-async'
+          };
+          var request = { method: 'POST', url: matchUrl, headers: headers, body: JSON.stringify(requestBody) };
+          var response = await fetch(matchUrl, {
+            method: 'POST',
+            headers: headers,
+            body: request.body,
+            referrerPolicy: 'no-referrer'
+          });
+          var contentLocation = response.headers.get('Content-Location') || response.headers.get('Location');
+          if (response.status === 202 && contentLocation) {
+            DebugModule.appendEntry({ step: 2, request: request, response: { status: response.status, body: null } });
+            return { ok: true, data: { statusUrl: contentLocation }, error: null };
+          }
+          var responseBody = null;
+          try { responseBody = await response.json(); } catch (_) {}
+          DebugModule.appendEntry({ step: 2, request: request, response: { status: response.status, body: responseBody } });
+          if (!response.ok) {
+            return { ok: false, data: null, error: 'Bulk member match failed: HTTP ' + response.status };
+          }
+          return { ok: true, data: { result: responseBody }, error: null };
+        } catch (err) {
+          return { ok: false, data: null, error: 'Bulk member match error: ' + (err.message || String(err)) };
+        }
+      },
+
+      runBulkExchange: async function(payer, members, newPayerConfig) {
+        ExchangeModule._result = null;
+        ExchangeModule._setStepState(1, 'in-progress', '');
+        var step1 = await ExchangeModule._acquireSystemToken(payer, newPayerConfig);
+        if (!step1.ok) {
+          ExchangeModule._setStepState(1, 'failed', step1.error);
+          ExchangeModule._showTryAgain();
+          return;
+        }
+        ExchangeModule._setStepState(1, 'success', 'Access token acquired');
+        ExchangeModule._setStepState(2, 'in-progress', '');
+        var step2 = await ExchangeModule._runBulkMemberMatch(payer, members, step1.data.access_token, newPayerConfig);
+        if (!step2.ok) {
+          ExchangeModule._setStepState(2, 'failed', step2.error);
+          ExchangeModule._showTryAgain();
+          return;
+        }
+        ExchangeModule._setStepState(2, 'success', step2.data.statusUrl ? 'Bulk request accepted for asynchronous processing.' : 'Bulk member match completed.');
+        var postPanel = document.getElementById('exchange-post-panel');
+        if (postPanel) {
+          postPanel.innerHTML = '<button id="exchange-try-again-btn" class="btn btn-secondary" type="button">Run Another Bulk Match</button>';
+          var tryAgainBtn = document.getElementById('exchange-try-again-btn');
+          if (tryAgainBtn) {
+            tryAgainBtn.addEventListener('click', function() {
+              UIModule._exchangePhase = 'setup';
+              UIModule.showView('exchange');
+            });
+          }
+        }
+      },
+
       _acquireMemberToken: async function(payer, fhirId, newPayerConfig) {
         try {
           var tokenUrl = payer.tokenUrl;
@@ -719,12 +872,7 @@
           body.set('grant_type', 'client_credentials');
           body.set('scope', 'patient/' + fhirId + (payer.scopeSuffix || '.rs'));
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-          if (payer.tokenAuthMethod === 'client_secret_basic') {
-            headers['Authorization'] = 'Basic ' + btoa(payer.clientId + ':' + payer.clientSecret);
-          } else {
-            body.set('client_id', payer.clientId);
-            body.set('client_secret', payer.clientSecret);
-          }
+          await ExchangeModule._configureTokenAuthentication(payer, payer.tokenUrl, body, headers);
           var reqData3 = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
             method: 'POST',
@@ -878,6 +1026,10 @@
             /(client_secret=)([^&]{0,4})([^&]*)/g,
             function(m, prefix, first4) { return prefix + first4 + '****'; }
           );
+          safe.request.body = safe.request.body.replace(
+            /(client_assertion=)([^&]{0,4})([^&]*)/g,
+            function(m, prefix, first4) { return prefix + first4 + '****'; }
+          );
         }
         // Remove access_token from response body
         if (safe.response && safe.response.body && typeof safe.response.body === 'object') {
@@ -948,6 +1100,9 @@
       _exchangeSelectedPayerId: null,
       _exchangeSelectedMemberId: null,
       _exchangePhase: 'setup',
+      _exchangeMode: 'single',
+      _singleMember: {},
+      _bulkMembers: [],
       _resultsActiveTab: null,
       _resultsActiveIndex: 0,
       _resultsKeyHandler: null,
@@ -1087,10 +1242,11 @@
           html += '<div class="step-tracker" aria-live="polite">';
           var steps = [
             { num: 1, name: 'System Token' },
-            { num: 2, name: 'Member Match' },
-            { num: 3, name: 'Member-Scoped Token' },
-            { num: 4, name: 'Resource Retrieval' }
+            { num: 2, name: UIModule._exchangeMode === 'bulk' ? 'Bulk Member Match' : 'Member Match' },
           ];
+          if (UIModule._exchangeMode !== 'bulk') {
+            steps.push({ num: 3, name: 'Member-Scoped Token' }, { num: 4, name: 'Resource Retrieval' });
+          }
           steps.forEach(function(step) {
             html += '<div class="step-row" id="step-row-' + step.num + '">';
             html += '<div class="step-icon step-pending"></div>';
@@ -1104,6 +1260,10 @@
         } else {
           // Setup panel
           html += '<div class="exchange-setup-panel">';
+          html += '<div class="exchange-mode-toggle" role="tablist" aria-label="Exchange mode">';
+          html += '<button class="exchange-mode-btn' + (UIModule._exchangeMode === 'single' ? ' active' : '') + '" data-exchange-mode="single" type="button" role="tab" aria-selected="' + (UIModule._exchangeMode === 'single') + '">Single Member</button>';
+          html += '<button class="exchange-mode-btn' + (UIModule._exchangeMode === 'bulk' ? ' active' : '') + '" data-exchange-mode="bulk" type="button" role="tab" aria-selected="' + (UIModule._exchangeMode === 'bulk') + '">Bulk Member Match</button>';
+          html += '</div>';
 
           // Payer dropdown
           html += '<div class="exchange-form-row">';
@@ -1117,50 +1277,76 @@
           });
           html += '</select></div>';
 
-          // Member dropdown
-          var memberDisabled = !UIModule._exchangeSelectedPayerId;
-          var selectedPayer = null;
-          if (UIModule._exchangeSelectedPayerId) {
-            selectedPayer = payers.find(function(p) { return p.id === UIModule._exchangeSelectedPayerId; });
+          if (UIModule._exchangeMode === 'bulk') {
+            html += UIModule.renderBulkMemberForm();
+            html += '</div>';
+            html += DebugModule.render();
+            html += '</div>';
+            return html;
           }
-          html += '<div class="exchange-form-row">';
-          html += '<label for="exchange-member-select">Member</label>';
-          html += '<select id="exchange-member-select" class="exchange-select form-input"' + (memberDisabled ? ' disabled' : '') + '>';
-          var memberPlaceholder = memberDisabled ? 'Select a Previous Payer first' : 'Select a Member';
-          var memberSelected = UIModule._exchangeSelectedMemberId !== null;
-          html += '<option value=""' + (!memberSelected ? ' selected' : '') + ' disabled>' + memberPlaceholder + '</option>';
-          if (selectedPayer && Array.isArray(selectedPayer.roster)) {
-            selectedPayer.roster.forEach(function(member) {
-              var sel = (UIModule._exchangeSelectedMemberId === member.id) ? ' selected' : '';
-              var label = UIModule.escapeHtml(member.firstName) + ' ' + UIModule.escapeHtml(member.lastName) + ' (' + UIModule.escapeHtml(member.dateOfBirth) + ')';
-              html += '<option value="' + UIModule.escapeHtml(member.id) + '"' + sel + '>' + label + '</option>';
-            });
-          }
-          html += '</select></div>';
 
-          // Summary line
-          var summaryText = '';
-          if (UIModule._exchangeSelectedPayerId && UIModule._exchangeSelectedMemberId && selectedPayer) {
-            var selectedMember = Array.isArray(selectedPayer.roster) ? selectedPayer.roster.find(function(m) { return m.id === UIModule._exchangeSelectedMemberId; }) : null;
-            if (selectedMember) {
-              summaryText = 'Testing ' + UIModule.escapeHtml(selectedPayer.name) + ' for ' +
-                UIModule.escapeHtml(selectedMember.firstName) + ' ' + UIModule.escapeHtml(selectedMember.lastName) +
-                ' (' + UIModule.escapeHtml(selectedMember.dateOfBirth) + ')';
-            }
-          }
-          html += '<p id="exchange-summary" class="exchange-summary">' + summaryText + '</p>';
-
-          // Run Exchange button
-          var runDisabled = !(UIModule._exchangeSelectedPayerId && UIModule._exchangeSelectedMemberId);
+          html += UIModule.renderSingleMemberForm();
+          var runDisabled = !UIModule._exchangeSelectedPayerId;
           html += '<button id="exchange-run-btn" class="btn btn-primary" type="button"' +
             (runDisabled ? ' disabled' : '') +
-            ' title="Select a Previous Payer and Member to proceed">Run Exchange</button>';
+            ' title="Complete the member details to proceed">Run Exchange</button>';
 
           html += '</div>';
         }
 
         html += DebugModule.render();
         html += '</div>';
+        return html;
+      },
+
+      renderBulkMemberForm: function() {
+        var members = UIModule._bulkMembers;
+        var html = '<div class="bulk-member-list">';
+        members.forEach(function(member, index) {
+          var field = function(name, label, type, value, required) {
+            return '<div class="form-field"><label for="bulk-' + index + '-' + name + '">' + label + (required ? '<span class="required-marker" aria-hidden="true">*</span>' : '') + '</label><input id="bulk-' + index + '-' + name + '" class="form-input" type="' + type + '" value="' + UIModule.escapeHtml(value || '') + '"' + (required ? ' required' : '') + ' autocomplete="off"></div>';
+          };
+          html += '<section class="bulk-member-form" data-bulk-member-index="' + index + '">';
+          html += '<div class="bulk-member-header"><h3>Member ' + (index + 1) + '</h3>';
+          if (members.length > 1) html += '<button class="roster-action-btn bulk-remove-member-btn" data-bulk-member-index="' + index + '" type="button">Remove</button>';
+          html += '</div><div class="bulk-member-fields">';
+          html += field('first-name', 'First Name', 'text', member.firstName, true);
+          html += field('last-name', 'Last Name', 'text', member.lastName, true);
+          html += field('dob', 'Date of Birth', 'date', member.dateOfBirth, true);
+          html += '<div class="form-field"><label for="bulk-' + index + '-gender">Gender</label><select id="bulk-' + index + '-gender" class="form-input"><option value=""' + (!member.gender ? ' selected' : '') + '>Not provided</option><option value="male"' + (member.gender === 'male' ? ' selected' : '') + '>male</option><option value="female"' + (member.gender === 'female' ? ' selected' : '') + '>female</option><option value="other"' + (member.gender === 'other' ? ' selected' : '') + '>other</option><option value="unknown"' + (member.gender === 'unknown' ? ' selected' : '') + '>unknown</option></select></div>';
+          html += field('identifier-system', 'Patient Identifier System', 'url', member.identifierSystem, false);
+          html += field('identifier-value', 'Patient Identifier Value', 'text', member.identifierValue, true);
+          html += field('subscriber-id', 'Coverage Subscriber ID', 'text', member.subscriberId, true);
+          html += field('coverage-start', 'Coverage Start', 'date', member.coverageStart, false);
+          html += field('coverage-end', 'Coverage End', 'date', member.coverageEnd, false);
+          html += field('consent-start', 'Consent Start', 'date', member.consentStart, true);
+          html += field('consent-end', 'Consent End', 'date', member.consentEnd, true);
+          html += '</div></section>';
+        });
+        html += '</div><div class="bulk-member-actions"><button id="bulk-add-member-btn" class="btn btn-secondary" type="button">Add Member</button>';
+        html += '<button id="bulk-run-btn" class="btn btn-primary" type="button"' + (!UIModule._exchangeSelectedPayerId ? ' disabled' : '') + '>Run Bulk Member Match</button></div>';
+        return html;
+      },
+
+      renderSingleMemberForm: function() {
+        var member = UIModule._singleMember;
+        var field = function(name, label, type, value, required) {
+          return '<div class="form-field"><label for="single-' + name + '">' + label + (required ? '<span class="required-marker" aria-hidden="true">*</span>' : '') + '</label><input id="single-' + name + '" class="form-input" type="' + type + '" value="' + UIModule.escapeHtml(value || '') + '"' + (required ? ' required' : '') + ' autocomplete="off"></div>';
+        };
+        var html = '<section id="single-member-form" class="bulk-member-form">';
+        html += '<div class="bulk-member-header"><h3>Member Details</h3></div><div class="bulk-member-fields">';
+        html += field('first-name', 'First Name', 'text', member.firstName, true);
+        html += field('last-name', 'Last Name', 'text', member.lastName, true);
+        html += field('dob', 'Date of Birth', 'date', member.dateOfBirth, true);
+        html += '<div class="form-field"><label for="single-gender">Gender</label><select id="single-gender" class="form-input"><option value=""' + (!member.gender ? ' selected' : '') + '>Not provided</option><option value="male"' + (member.gender === 'male' ? ' selected' : '') + '>male</option><option value="female"' + (member.gender === 'female' ? ' selected' : '') + '>female</option><option value="other"' + (member.gender === 'other' ? ' selected' : '') + '>other</option><option value="unknown"' + (member.gender === 'unknown' ? ' selected' : '') + '>unknown</option></select></div>';
+        html += field('identifier-system', 'Patient Identifier System', 'url', member.identifierSystem, false);
+        html += field('identifier-value', 'Patient Identifier Value', 'text', member.identifierValue, true);
+        html += field('subscriber-id', 'Coverage Subscriber ID', 'text', member.subscriberId, true);
+        html += field('coverage-start', 'Coverage Start', 'date', member.coverageStart, false);
+        html += field('coverage-end', 'Coverage End', 'date', member.coverageEnd, false);
+        html += field('consent-start', 'Consent Start', 'date', member.consentStart, false);
+        html += field('consent-end', 'Consent End', 'date', member.consentEnd, false);
+        html += '</div></section>';
         return html;
       },
 
@@ -1372,7 +1558,7 @@
         html += '</div>';
 
         html += '<div class="form-field">';
-        html += '<label for="np-secret">Client Secret<span class="required-marker" aria-hidden="true">*</span></label>';
+        html += '<label for="np-secret">Client Secret</label>';
         html += '<div class="form-row">';
         html += '<input id="np-secret" class="form-input" type="password" autocomplete="off">';
         html += '<button id="np-secret-toggle" class="secret-toggle" type="button" aria-label="Show client secret">Show</button>';
@@ -1385,7 +1571,25 @@
         html += '<select id="np-auth-method" class="form-input">';
         html += '<option value="client_secret_post" selected>client_secret_post</option>';
         html += '<option value="client_secret_basic">client_secret_basic</option>';
+        html += '<option value="private_key_jwt">private_key_jwt</option>';
         html += '</select>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-jwks-uri">JWKS URI</label>';
+        html += '<input id="np-jwks-uri" class="form-input" type="url" placeholder="https://client.example.org/jwks.json" autocomplete="off">';
+        html += '<div id="np-jwks-uri-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-private-key-jwk">Private Signing Key JWK</label>';
+        html += '<textarea id="np-private-key-jwk" class="form-input" rows="5" placeholder="Test environments only: private JWK JSON" autocomplete="off"></textarea>';
+        html += '<div id="np-private-key-jwk-error" class="field-error"></div>';
+        html += '</div>';
+
+        html += '<div class="form-field">';
+        html += '<label for="np-redirect-uris">Redirect URIs</label>';
+        html += '<textarea id="np-redirect-uris" class="form-input" rows="3" placeholder="One HTTPS URI per line" autocomplete="off"></textarea>';
         html += '</div>';
 
         html += '<div class="form-check-row">';
@@ -1533,7 +1737,7 @@
           html += '</div>';
 
           html += '<div class="form-field">';
-          html += '<label for="ep-secret">Client Secret<span class="required-marker" aria-hidden="true">*</span></label>';
+          html += '<label for="ep-secret">Client Secret</label>';
           html += '<div class="form-row">';
           html += '<input id="ep-secret" class="form-input" type="password" value="' + UIModule.escapeHtml(payer.clientSecret || '') + '" autocomplete="off">';
           html += '<button id="ep-secret-toggle" class="secret-toggle" type="button" aria-label="Show client secret">Show</button>';
@@ -1546,7 +1750,25 @@
           html += '<select id="ep-auth-method" class="form-input">';
           html += '<option value="client_secret_post"' + (payer.tokenAuthMethod === 'client_secret_post' || !payer.tokenAuthMethod ? ' selected' : '') + '>client_secret_post</option>';
           html += '<option value="client_secret_basic"' + (payer.tokenAuthMethod === 'client_secret_basic' ? ' selected' : '') + '>client_secret_basic</option>';
+          html += '<option value="private_key_jwt"' + (payer.tokenAuthMethod === 'private_key_jwt' ? ' selected' : '') + '>private_key_jwt</option>';
           html += '</select>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-jwks-uri">JWKS URI</label>';
+          html += '<input id="ep-jwks-uri" class="form-input" type="url" value="' + UIModule.escapeHtml(payer.jwksUri || '') + '" placeholder="https://client.example.org/jwks.json" autocomplete="off">';
+          html += '<div id="ep-jwks-uri-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-private-key-jwk">Private Signing Key JWK</label>';
+          html += '<textarea id="ep-private-key-jwk" class="form-input" rows="5" placeholder="Test environments only: private JWK JSON" autocomplete="off">' + UIModule.escapeHtml(payer.privateKeyJwk || '') + '</textarea>';
+          html += '<div id="ep-private-key-jwk-error" class="field-error"></div>';
+          html += '</div>';
+
+          html += '<div class="form-field">';
+          html += '<label for="ep-redirect-uris">Redirect URIs</label>';
+          html += '<textarea id="ep-redirect-uris" class="form-input" rows="3" placeholder="One HTTPS URI per line" autocomplete="off">' + UIModule.escapeHtml((payer.redirectUris || []).join('\n')) + '</textarea>';
           html += '</div>';
 
           html += '<div class="form-check-row">';
@@ -1665,9 +1887,10 @@
                 { inputId: 'np-name',      errorId: 'np-name-error',      key: 'name' },
                 { inputId: 'np-fhir-url',  errorId: 'np-fhir-url-error',  key: 'fhirBaseUrl' },
                 { inputId: 'np-token-url', errorId: 'np-token-url-error', key: 'tokenUrl' },
-                { inputId: 'np-client-id', errorId: 'np-client-id-error', key: 'clientId' },
-                { inputId: 'np-secret',    errorId: 'np-secret-error',    key: 'clientSecret' }
+                { inputId: 'np-client-id', errorId: 'np-client-id-error', key: 'clientId' }
               ];
+              var newAuthMethod = document.getElementById('np-auth-method').value;
+              if (newAuthMethod !== 'private_key_jwt') fields.push({ inputId: 'np-secret', errorId: 'np-secret-error', key: 'clientSecret' });
 
               // Clear previous errors
               fields.forEach(function(f) {
@@ -1695,7 +1918,18 @@
 
               if (!valid) return;
 
-              values.tokenAuthMethod = document.getElementById('np-auth-method').value;
+              if (newAuthMethod === 'private_key_jwt') {
+                var newJwksUri = document.getElementById('np-jwks-uri');
+                var newPrivateKeyJwk = document.getElementById('np-private-key-jwk');
+                try { JSON.parse(newPrivateKeyJwk.value.trim()); } catch (_) { newPrivateKeyJwk.classList.add('invalid'); document.getElementById('np-private-key-jwk-error').textContent = 'Enter a private JWK JSON object'; document.getElementById('np-private-key-jwk-error').classList.add('visible'); return; }
+                if (!newJwksUri.value.trim()) { newJwksUri.classList.add('invalid'); document.getElementById('np-jwks-uri-error').textContent = 'Required for private_key_jwt'; document.getElementById('np-jwks-uri-error').classList.add('visible'); return; }
+              }
+
+              values.tokenAuthMethod = newAuthMethod;
+              values.clientSecret = document.getElementById('np-secret').value.trim();
+              values.jwksUri = document.getElementById('np-jwks-uri').value.trim();
+              values.privateKeyJwk = document.getElementById('np-private-key-jwk').value.trim();
+              values.redirectUris = document.getElementById('np-redirect-uris').value.split(/\r?\n/).map(function(uri) { return uri.trim(); }).filter(function(uri) { return !!uri; });
               values.useProxy = document.getElementById('np-use-proxy').checked;
 
               ConfigModule.addPayer(values);
@@ -1738,9 +1972,10 @@
                 { inputId: 'ep-name',      errorId: 'ep-name-error',      key: 'name' },
                 { inputId: 'ep-fhir-url',  errorId: 'ep-fhir-url-error',  key: 'fhirBaseUrl' },
                 { inputId: 'ep-token-url', errorId: 'ep-token-url-error', key: 'tokenUrl' },
-                { inputId: 'ep-client-id', errorId: 'ep-client-id-error', key: 'clientId' },
-                { inputId: 'ep-secret',    errorId: 'ep-secret-error',    key: 'clientSecret' }
+                { inputId: 'ep-client-id', errorId: 'ep-client-id-error', key: 'clientId' }
               ];
+              var editAuthMethod = document.getElementById('ep-auth-method').value;
+              if (editAuthMethod !== 'private_key_jwt') epFields.push({ inputId: 'ep-secret', errorId: 'ep-secret-error', key: 'clientSecret' });
 
               // Clear previous errors
               epFields.forEach(function(f) {
@@ -1768,7 +2003,18 @@
 
               if (!valid) return;
 
-              values.tokenAuthMethod = document.getElementById('ep-auth-method').value;
+              if (editAuthMethod === 'private_key_jwt') {
+                var editJwksUri = document.getElementById('ep-jwks-uri');
+                var editPrivateKeyJwk = document.getElementById('ep-private-key-jwk');
+                try { JSON.parse(editPrivateKeyJwk.value.trim()); } catch (_) { editPrivateKeyJwk.classList.add('invalid'); document.getElementById('ep-private-key-jwk-error').textContent = 'Enter a private JWK JSON object'; document.getElementById('ep-private-key-jwk-error').classList.add('visible'); return; }
+                if (!editJwksUri.value.trim()) { editJwksUri.classList.add('invalid'); document.getElementById('ep-jwks-uri-error').textContent = 'Required for private_key_jwt'; document.getElementById('ep-jwks-uri-error').classList.add('visible'); return; }
+              }
+
+              values.tokenAuthMethod = editAuthMethod;
+              values.clientSecret = document.getElementById('ep-secret').value.trim();
+              values.jwksUri = document.getElementById('ep-jwks-uri').value.trim();
+              values.privateKeyJwk = document.getElementById('ep-private-key-jwk').value.trim();
+              values.redirectUris = document.getElementById('ep-redirect-uris').value.split(/\r?\n/).map(function(uri) { return uri.trim(); }).filter(function(uri) { return !!uri; });
               values.useProxy = document.getElementById('ep-use-proxy').checked;
 
               ConfigModule.updatePayer(UIModule._expandedPayerId, values);
@@ -1936,19 +2182,50 @@
       },
 
       bindExchangeEvents: function() {
+        var captureSingleMember = function() {
+          var value = function(name) {
+            var input = document.getElementById('single-' + name);
+            return input ? input.value.trim() : '';
+          };
+          UIModule._singleMember = {
+            firstName: value('first-name'), lastName: value('last-name'), dateOfBirth: value('dob'), gender: value('gender'),
+            identifierSystem: value('identifier-system'), identifierValue: value('identifier-value'), subscriberId: value('subscriber-id'),
+            coverageStart: value('coverage-start'), coverageEnd: value('coverage-end'), consentStart: value('consent-start'), consentEnd: value('consent-end')
+          };
+          return UIModule._singleMember;
+        };
+
+        var captureBulkMembers = function() {
+          UIModule._bulkMembers = Array.prototype.map.call(document.querySelectorAll('[data-bulk-member-index]'), function(form) {
+            var index = form.dataset.bulkMemberIndex;
+            var value = function(name) {
+              var input = document.getElementById('bulk-' + index + '-' + name);
+              return input ? input.value.trim() : '';
+            };
+            return {
+              firstName: value('first-name'), lastName: value('last-name'), dateOfBirth: value('dob'), gender: value('gender'),
+              identifierSystem: value('identifier-system'), identifierValue: value('identifier-value'), subscriberId: value('subscriber-id'),
+              coverageStart: value('coverage-start'), coverageEnd: value('coverage-end'), consentStart: value('consent-start'), consentEnd: value('consent-end')
+            };
+          });
+        };
+
+        document.querySelectorAll('[data-exchange-mode]').forEach(function(button) {
+          button.addEventListener('click', function() {
+            captureSingleMember();
+            captureBulkMembers();
+            UIModule._exchangeMode = this.dataset.exchangeMode;
+            if (UIModule._exchangeMode === 'bulk' && UIModule._bulkMembers.length === 0) UIModule._bulkMembers = [{}];
+            UIModule.showView('exchange');
+          });
+        });
+
         var payerSelect = document.getElementById('exchange-payer-select');
         if (payerSelect) {
           payerSelect.addEventListener('change', function() {
+            captureSingleMember();
+            captureBulkMembers();
             UIModule._exchangeSelectedPayerId = this.value || null;
-            UIModule._exchangeSelectedMemberId = null;
-            UIModule.showView('exchange');
-          });
-        }
-
-        var memberSelect = document.getElementById('exchange-member-select');
-        if (memberSelect) {
-          memberSelect.addEventListener('change', function() {
-            UIModule._exchangeSelectedMemberId = this.value || null;
             UIModule.showView('exchange');
           });
         }
@@ -1959,11 +2236,56 @@
             var config = ConfigModule.getConfig();
             if (!config || !Array.isArray(config.previousPayers)) return;
             var payer = config.previousPayers.find(function(p) { return p.id === UIModule._exchangeSelectedPayerId; });
-            var member = payer && Array.isArray(payer.roster) ? payer.roster.find(function(m) { return m.id === UIModule._exchangeSelectedMemberId; }) : null;
+            var member = captureSingleMember();
+            var requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'identifierValue', 'subscriberId'];
+            var valid = requiredFields.every(function(field) { return !!member[field]; }) &&
+              (!member.coverageStart || !member.coverageEnd || member.coverageStart <= member.coverageEnd) &&
+              (!member.consentStart || !member.consentEnd || member.consentStart <= member.consentEnd);
+            if (!valid) {
+              var singleMemberForm = document.getElementById('single-member-form');
+              if (singleMemberForm) singleMemberForm.reportValidity();
+              return;
+            }
             if (!payer || !member) return;
             UIModule._exchangePhase = 'running';
             UIModule.showView('exchange');
             ExchangeModule.runExchange(payer, member, { newPayer: config.newPayer, corsProxyUrl: config.corsProxyUrl || CORS_PROXY_URL });
+          });
+        }
+
+        var addBulkMemberBtn = document.getElementById('bulk-add-member-btn');
+        if (addBulkMemberBtn) {
+          addBulkMemberBtn.addEventListener('click', function() {
+            captureBulkMembers();
+            UIModule._bulkMembers.push({});
+            UIModule.showView('exchange');
+          });
+        }
+
+        document.querySelectorAll('.bulk-remove-member-btn').forEach(function(button) {
+          button.addEventListener('click', function() {
+            captureBulkMembers();
+            UIModule._bulkMembers.splice(Number(this.dataset.bulkMemberIndex), 1);
+            UIModule.showView('exchange');
+          });
+        });
+
+        var runBulkBtn = document.getElementById('bulk-run-btn');
+        if (runBulkBtn) {
+          runBulkBtn.addEventListener('click', function() {
+            captureBulkMembers();
+            var members = UIModule._bulkMembers;
+            var requiredFields = ['firstName', 'lastName', 'dateOfBirth', 'identifierValue', 'subscriberId', 'consentStart', 'consentEnd'];
+            var valid = members.length > 0 && members.every(function(member) {
+              return requiredFields.every(function(field) { return !!member[field]; }) && member.consentStart <= member.consentEnd && (!member.coverageStart || !member.coverageEnd || member.coverageStart <= member.coverageEnd);
+            });
+            if (!valid) return;
+            var config = ConfigModule.getConfig();
+            var payer = config && Array.isArray(config.previousPayers) ? config.previousPayers.find(function(item) { return item.id === UIModule._exchangeSelectedPayerId; }) : null;
+            if (!payer) return;
+            UIModule._exchangePhase = 'running';
+            UIModule.showView('exchange');
+            ExchangeModule.runBulkExchange(payer, members, { newPayer: config.newPayer, corsProxyUrl: config.corsProxyUrl || CORS_PROXY_URL });
           });
         }
 
