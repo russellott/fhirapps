@@ -74,7 +74,8 @@ export default {
         method: 'POST',
         headers: {
           'Content-Type': request.headers.get('Content-Type') || 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
+          'Accept': request.headers.get('Accept') || 'application/json',
+          ...(request.headers.get('Authorization') ? { 'Authorization': request.headers.get('Authorization') } : {})
         },
         body
       });

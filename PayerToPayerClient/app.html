@@ -712,6 +712,7 @@
           }
           return { ok: true, data: { fhirId: fhirId }, error: null };
         } catch (err) {
+          DebugModule.appendEntry({ step: 2, request: reqData2, response: { status: 0, body: err.message || String(err) } });
           return { ok: false, data: null, error: 'Member match error: ' + (err.message || String(err)) };
         }
       },
@@ -826,6 +827,7 @@
           }
           return { ok: true, data: { result: responseBody }, error: null };
         } catch (err) {
+          DebugModule.appendEntry({ step: 2, request: request || { method: 'POST', url: payer.fhirBaseUrl + '/Patient/$bulk-member-match', headers: {}, body: null }, response: { status: 0, body: err.message || String(err) } });
           return { ok: false, data: null, error: 'Bulk member match error: ' + (err.message || String(err)) };
         }
       },
@@ -1030,6 +1032,8 @@
           if (typeof auth === 'string' && auth.indexOf('Basic ') === 0) {
             var b64 = auth.slice(6);
             safe.request.headers['Authorization'] = 'Basic ' + b64.slice(0, 4) + '****';
+          } else if (typeof auth === 'string' && auth.indexOf('Bearer ') === 0) {
+            safe.request.headers['Authorization'] = 'Bearer ****';
           }
         }
         // Redact client_secret in URL-encoded request body
