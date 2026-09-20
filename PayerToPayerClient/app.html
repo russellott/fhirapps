@@ -789,7 +789,7 @@
           return { ok: false, data: null, error: 'Bulk member match requires at least one member' };
         }
         try {
-          var matchUrl = payer.fhirBaseUrl + '/Patient/$bulk-member-match';
+          var matchUrl = payer.fhirBaseUrl + '/Group/$bulk-member-match';
           if (payer.useProxy && newPayerConfig.corsProxyUrl) {
             matchUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(matchUrl);
           }
