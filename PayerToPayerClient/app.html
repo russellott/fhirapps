@@ -641,19 +641,13 @@
         }
         try {
           var tokenUrl = payer.tokenUrl;
-          if (isLocalhost) {
-            tokenUrl = LOCAL_TOKEN_PROXY_URL;
-          } else if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+          if (payer.useProxy && newPayerConfig.corsProxyUrl) {
             tokenUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(tokenUrl);
           }
           var body = new URLSearchParams();
           body.set('grant_type', 'client_credentials');
           body.set('scope', scope);
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-          if (isLocalhost) {
-            headers = { 'Content-Type': 'application/json' };
-            body = new URLSearchParams({});
-          }
           ExchangeModule._configureTokenAuthentication(payer, body, headers);
           var reqData = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
@@ -681,17 +675,16 @@
       },
 
       _runMemberMatch: async function(payer, member, systemToken, newPayerConfig) {
-        var reqData2 = null;
         try {
           var matchUrl = payer.fhirBaseUrl + '/Patient/$member-match';
           if (payer.useProxy && newPayerConfig.corsProxyUrl) {
             matchUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(matchUrl);
           }
           var parametersBody = ExchangeModule._buildMemberMatchParameters(payer, member, newPayerConfig);
-          reqData2 = { method: 'POST', url: matchUrl, headers: { 'Authorization': 'Bearer ' + systemToken, 'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json' }, body: JSON.stringify(parametersBody) };
+          var reqData2 = { method: 'POST', url: matchUrl, headers: { 'Authorization': 'Bearer ' + systemToken, 'Content-Type': 'application/fhir+json' }, body: JSON.stringify(parametersBody) };
           var response = await fetch(matchUrl, {
             method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + systemToken, 'Content-Type': 'application/fhir+json', 'Accept': 'application/fhir+json' },
+            headers: { 'Authorization': 'Bearer ' + systemToken, 'Content-Type': 'application/fhir+json' },
             body: JSON.stringify(parametersBody),
             referrerPolicy: 'no-referrer'
           });
@@ -706,9 +699,7 @@
             return { ok: false, data: null, error: 'Member not found at Previous Payer — check demographics or member ID. Submitted: ' + member.firstName + ' ' + member.lastName + ', DOB ' + member.dateOfBirth + ', Member ID ' + (member.subscriberId || member.memberIdAtOldPayer) + '.' };
           }
           if (!response.ok) {
-            var errorBody = null;
-            try { errorBody = await response.json(); } catch (_) { try { errorBody = await response.text(); } catch (_) {} }
-            DebugModule.appendEntry({ step: 2, request: reqData2, response: { status: response.status, body: errorBody } });
+            DebugModule.appendEntry({ step: 2, request: reqData2, response: { status: response.status, body: null } });
             return { ok: false, data: null, error: 'Member match failed: HTTP ' + response.status };
           }
           var responseData = await response.json();
@@ -721,7 +712,6 @@
           }
           return { ok: true, data: { fhirId: fhirId }, error: null };
         } catch (err) {
-          DebugModule.appendEntry({ step: 2, request: reqData2, response: { status: 0, body: err.message || String(err), detail: 'The browser could not read a response. Check the target URL, CORS proxy setting, and browser Network panel.' } });
           return { ok: false, data: null, error: 'Member match error: ' + (err.message || String(err)) };
         }
       },
@@ -836,7 +826,6 @@
           }
           return { ok: true, data: { result: responseBody }, error: null };
         } catch (err) {
-          DebugModule.appendEntry({ step: 2, request: request || { method: 'POST', url: payer.fhirBaseUrl + '/Patient/$bulk-member-match', headers: {}, body: null }, response: { status: 0, body: err.message || String(err), detail: 'The browser could not read a response. Check the target URL, CORS proxy setting, and browser Network panel.' } });
           return { ok: false, data: null, error: 'Bulk member match error: ' + (err.message || String(err)) };
         }
       },
@@ -888,19 +877,13 @@
         }
         try {
           var tokenUrl = payer.tokenUrl;
-          if (isLocalhost) {
-            tokenUrl = LOCAL_TOKEN_PROXY_URL;
-          } else if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+          if (payer.useProxy && newPayerConfig.corsProxyUrl) {
             tokenUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(tokenUrl);
           }
           var body = new URLSearchParams();
           body.set('grant_type', 'client_credentials');
           body.set('scope', scope);
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-          if (isLocalhost) {
-            headers = { 'Content-Type': 'application/json' };
-            body = new URLSearchParams({});
-          }
           ExchangeModule._configureTokenAuthentication(payer, body, headers);
           var reqData3 = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
@@ -1041,17 +1024,12 @@
       _redact: function(entry) {
         var safe;
         try { safe = JSON.parse(JSON.stringify(entry)); } catch (e) { safe = { step: entry.step, request: { method: entry.request && entry.request.method, url: entry.request && entry.request.url, headers: {}, body: null }, response: { status: entry.response && entry.response.status, body: null } }; }
-        if (safe.request && typeof safe.request.body === 'string' && safe.request.headers && safe.request.headers['Content-Type'] === 'application/fhir+json') {
-          try { safe.request.body = JSON.parse(safe.request.body); } catch (_) {}
-        }
         // Redact Authorization: Basic header (show first 4 chars of base64 + ****)
         if (safe.request && safe.request.headers) {
           var auth = safe.request.headers['Authorization'];
           if (typeof auth === 'string' && auth.indexOf('Basic ') === 0) {
             var b64 = auth.slice(6);
             safe.request.headers['Authorization'] = 'Basic ' + b64.slice(0, 4) + '****';
-          } else if (typeof auth === 'string' && auth.indexOf('Bearer ') === 0) {
-            safe.request.headers['Authorization'] = 'Bearer ****';
           }
         }
         // Redact client_secret in URL-encoded request body

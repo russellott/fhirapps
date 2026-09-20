@@ -26,49 +26,28 @@
  * • The worker never exposes secrets — it simply relays the request.
  */
 
-const ALLOWED_ORIGINS = new Set([
-  'https://russellott.github.io',
-  'https://www.russellott.github.io'
-]);
-
-function isAllowedOrigin(origin) {
-  if (!origin) {
-    return false;
-  }
-
-  if (ALLOWED_ORIGINS.has(origin)) {
-    return true;
-  }
-
-  try {
-    const url = new URL(origin);
-    return (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && ['http:', 'https:'].includes(url.protocol);
-  } catch {
-    return false;
-  }
-}
+const ALLOWED_ORIGIN = 'https://russellott.github.io';
 
 export default {
   async fetch(request) {
-
-    const origin = request.headers.get('Origin') || '';
 
     // --- Preflight -----------------------------------------------------------
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
-        headers: corsHeaders(origin || 'https://russellott.github.io')
+        headers: corsHeaders()
       });
     }
 
     // --- Only POST -----------------------------------------------------------
     if (request.method !== 'POST') {
-      return jsonError(405, 'Only POST requests are supported', origin || 'https://russellott.github.io');
+      return jsonError(405, 'Only POST requests are supported');
     }
 
     // --- Origin check --------------------------------------------------------
-    if (origin && !isAllowedOrigin(origin)) {
-      return jsonError(403, `Origin ${origin} is not allowed`, origin);
+    const origin = request.headers.get('Origin') || '';
+    if (origin !== ALLOWED_ORIGIN) {
+      return jsonError(403, `Origin ${origin} is not allowed`);
     }
 
     // --- Target URL ----------------------------------------------------------
@@ -95,9 +74,7 @@ export default {
         method: 'POST',
         headers: {
           'Content-Type': request.headers.get('Content-Type') || 'application/x-www-form-urlencoded',
-          'Accept': request.headers.get('Accept') || 'application/json',
-          ...(request.headers.get('Authorization') ? { 'Authorization': request.headers.get('Authorization') } : {}),
-          ...(request.headers.get('Origin') ? { 'Origin': request.headers.get('Origin') } : {})
+          'Accept': 'application/json'
         },
         body
       });
@@ -107,36 +84,32 @@ export default {
       return new Response(responseBody, {
         status: proxyResponse.status,
         headers: {
-          ...corsHeaders(origin),
-          'Content-Type': proxyResponse.headers.get('Content-Type') || 'application/json',
-          'X-Proxy-Upstream-Status': String(proxyResponse.status),
-          'X-Proxy-Upstream-Url': targetUrl
+          ...corsHeaders(),
+          'Content-Type': proxyResponse.headers.get('Content-Type') || 'application/json'
         }
       });
 
     } catch (err) {
-      return jsonError(502, `Upstream request failed: ${err.message}`, origin);
+      return jsonError(502, `Upstream request failed: ${err.message}`);
     }
   }
 };
 
 // ---------------------------------------------------------------------------
-function corsHeaders(origin = 'https://russellott.github.io') {
+function corsHeaders() {
   return {
-    'Access-Control-Allow-Origin': origin || 'https://russellott.github.io',
+    'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Expose-Headers': 'X-Proxy-Upstream-Status, X-Proxy-Upstream-Url, Content-Location, Location',
-    'Access-Control-Max-Age': '86400',
-    'Vary': 'Origin'
+    'Access-Control-Max-Age': '86400'
   };
 }
 
-function jsonError(status, message, origin) {
+function jsonError(status, message) {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: {
-      ...corsHeaders(origin),
+      ...corsHeaders(),
       'Content-Type': 'application/json'
     }
   });
