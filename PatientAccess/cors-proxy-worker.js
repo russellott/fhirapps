@@ -52,7 +52,6 @@ export default {
   async fetch(request) {
 
     const origin = request.headers.get('Origin') || '';
-    const isLocalRequest = !origin && (request.url.includes('localhost') || request.url.includes('127.0.0.1'));
 
     // --- Preflight -----------------------------------------------------------
     if (request.method === 'OPTIONS') {
@@ -70,10 +69,6 @@ export default {
     // --- Origin check --------------------------------------------------------
     if (origin && !isAllowedOrigin(origin)) {
       return jsonError(403, `Origin ${origin} is not allowed`, origin);
-    }
-
-    if (!origin && !isLocalRequest) {
-      return jsonError(403, 'Origin header is required for remote requests', 'https://russellott.github.io');
     }
 
     // --- Target URL ----------------------------------------------------------

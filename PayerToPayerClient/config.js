@@ -4,6 +4,7 @@ const APP_BASE_URL = isLocalhost
   : 'https://russellott.github.io/fhirapps/PayerToPayerClient';
 // Use the same CORS proxy URL as PatientAccess (cors-proxy-worker.js deployed to Cloudflare Workers)
 const CORS_PROXY_URL = isLocalhost ? '' : 'https://autumn-leaf-a71d.russellott.workers.dev/';
+const LOCAL_TOKEN_PROXY_URL = 'http://localhost:3001/api/token';
 
 const FHIR_SERVERS = {
   healthInteractiveUAT: {

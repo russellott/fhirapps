@@ -641,13 +641,19 @@
         }
         try {
           var tokenUrl = payer.tokenUrl;
-          if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+          if (isLocalhost) {
+            tokenUrl = LOCAL_TOKEN_PROXY_URL;
+          } else if (payer.useProxy && newPayerConfig.corsProxyUrl) {
             tokenUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(tokenUrl);
           }
           var body = new URLSearchParams();
           body.set('grant_type', 'client_credentials');
           body.set('scope', scope);
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+          if (isLocalhost) {
+            headers = { 'Content-Type': 'application/json' };
+            body = new URLSearchParams({});
+          }
           ExchangeModule._configureTokenAuthentication(payer, body, headers);
           var reqData = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
@@ -882,13 +888,19 @@
         }
         try {
           var tokenUrl = payer.tokenUrl;
-          if (payer.useProxy && newPayerConfig.corsProxyUrl) {
+          if (isLocalhost) {
+            tokenUrl = LOCAL_TOKEN_PROXY_URL;
+          } else if (payer.useProxy && newPayerConfig.corsProxyUrl) {
             tokenUrl = newPayerConfig.corsProxyUrl + '?url=' + encodeURIComponent(tokenUrl);
           }
           var body = new URLSearchParams();
           body.set('grant_type', 'client_credentials');
           body.set('scope', scope);
           var headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+          if (isLocalhost) {
+            headers = { 'Content-Type': 'application/json' };
+            body = new URLSearchParams({});
+          }
           ExchangeModule._configureTokenAuthentication(payer, body, headers);
           var reqData3 = { method: 'POST', url: tokenUrl, headers: headers, body: body.toString() };
           var response = await fetch(tokenUrl, {
