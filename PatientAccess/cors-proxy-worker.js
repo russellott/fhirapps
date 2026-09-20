@@ -70,12 +70,13 @@ export default {
     // --- Forward the request server-to-server --------------------------------
     try {
       const body = await request.text();
+      const upstreamHeaders = new Headers(request.headers);
+      upstreamHeaders.delete('Origin');
+      upstreamHeaders.delete('Host');
+      upstreamHeaders.set('Accept', 'application/json');
       const proxyResponse = await fetch(targetUrl, {
         method: 'POST',
-        headers: {
-          'Content-Type': request.headers.get('Content-Type') || 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
-        },
+        headers: upstreamHeaders,
         body
       });
 

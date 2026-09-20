@@ -13,7 +13,7 @@ const APP_ORIGIN = isLocalhost ? LOCAL_ORIGIN : GITHUB_ORIGIN;
 
 // CORS Proxy — Deploy the included cors-proxy-worker.js to Cloudflare Workers
 // and paste your worker URL here.  Leave blank to disable proxy fallback.
-const CORS_PROXY_URL = isLocalhost ? "" : "https://autumn-leaf-a71d.russellott.workers.dev/";
+const CORS_PROXY_URL = isLocalhost ? "" : "https://autumn-leaf-a71d.kmhales9.workers.dev/";
 
 const FHIR_SERVERS = {
 

@@ -3,7 +3,7 @@ const APP_BASE_URL = isLocalhost
   ? `${window.location.protocol}//${window.location.host}/PayerToPayerClient`
   : 'https://russellott.github.io/fhirapps/PayerToPayerClient';
 // Use the same CORS proxy URL as PatientAccess (cors-proxy-worker.js deployed to Cloudflare Workers)
-const CORS_PROXY_URL = isLocalhost ? '' : 'https://autumn-leaf-a71d.russellott.workers.dev/';
+const CORS_PROXY_URL = isLocalhost ? '' : 'https://autumn-leaf-a71d.kmhales9.workers.dev/';
 
 const FHIR_SERVERS = {
   healthInteractiveUAT: {
