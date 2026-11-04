@@ -5,6 +5,8 @@
 <head>
     <title>Patient Access Demo - Debug Mode</title>
     <meta name="referrer" content="origin">
+    <script>window.__localSecrets = {};</script>
+    <script src="config.local.js" onerror="console.warn('config.local.js not found — running without local credentials')"></script>
     <script src="config.js"></script>
     <script src="token-handler.js"></script>
     <script src="network-debugger.js"></script>

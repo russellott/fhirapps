@@ -11,17 +11,20 @@ const GITHUB_ORIGIN = "https://russellott.github.io";
 const APP_BASE_URL = isLocalhost ? LOCAL_BASE_URL : GITHUB_PAGES_URL;
 const APP_ORIGIN = isLocalhost ? LOCAL_ORIGIN : GITHUB_ORIGIN;
 
+// Secrets loaded from config.local.js (gitignored). Copy config.local.example.js → config.local.js and fill in values.
+const _s = window.__localSecrets || {};
+
 // CORS Proxy — Deploy the included cors-proxy-worker.js to Cloudflare Workers
-// and paste your worker URL here.  Leave blank to disable proxy fallback.
-const CORS_PROXY_URL = isLocalhost ? "" : "https://YOUR_CLOUDFLARE_WORKER_SUBDOMAIN.workers.dev/";
+// and set corsProxyUrl in config.local.js.  Leave blank to disable proxy fallback.
+const CORS_PROXY_URL = isLocalhost ? "" : (_s.corsProxyUrl || "");
 
 const FHIR_SERVERS = {
 
     // MT Medicaid UAT Environment (HealthInteractive / Keycloak)
     deloitte: {
         name: "MT Medicaid Sandbox Environment",
-        clientId: "REDACTED_DELOITTE_CLIENT_ID",
-        clientSecret: "REDACTED_DELOITTE_CLIENT_SECRET",
+        clientId: _s.deloitte?.clientId || null,
+        clientSecret: _s.deloitte?.clientSecret || null,
         usePkce: false,
         tokenAuthMethod: "client_secret_post",
         tokenReferrerPolicy: "no-referrer",
@@ -49,8 +52,8 @@ const FHIR_SERVERS = {
     // Deloitte HealthInteractive Connectathon Demo Server
     deloitte_demo: {
         name: "Deloitte HealthInteractive Server",
-        clientId: "sharedClient2",
-        clientSecret: "REDACTED_DELOITTE_DEMO_CLIENT_SECRET",
+        clientId: _s.deloitte_demo?.clientId || null,
+        clientSecret: _s.deloitte_demo?.clientSecret || null,
         usePkce: false,
         tokenAuthMethod: "client_secret_post",
         tokenReferrerPolicy: "no-referrer",
@@ -91,7 +94,7 @@ const FHIR_SERVERS = {
     // Cigna FHIR Server
     cigna: {
         name: "Cigna Developer API",
-        clientId: "REDACTED_CIGNA_CLIENT_ID",
+        clientId: _s.cigna?.clientId || null,
         clientSecret: null,
         usePkce: true,
         tokenAuthMethod: "client_secret_post",
@@ -112,8 +115,8 @@ const FHIR_SERVERS = {
     // Epic Sandbox FHIR Server
     epic: {
         name: "Epic Sandbox FHIR API",
-        clientId: "REDACTED_EPIC_CLIENT_ID",
-        clientSecret: "REDACTED_EPIC_CLIENT_SECRET",
+        clientId: _s.epic?.clientId || null,
+        clientSecret: _s.epic?.clientSecret || null,
         usePkce: true,
         tokenAuthMethod: "client_secret_post",
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
