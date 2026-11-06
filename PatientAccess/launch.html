@@ -264,8 +264,8 @@
                     <strong>🏥 ${config.name}</strong><br>
                     <div class="detail-line"><span class="label">ISS:</span> ${iss || 'Dynamic'}</div>
                     <div class="detail-line"><span class="label">Client ID:</span> ${config.clientId}</div>
-                    <div class="detail-line"><span class="label">Auth Mode:</span> ${usePkce ? 'PKCE (Public Client)' : 'Client Secret (Confidential Client)'}</div>
-                    <div class="detail-line"><span class="label">Client Secret:</span> ${usePkce ? 'Not used in PKCE mode' : (config.clientSecret ? '✓ Configured' : '⚠ Not configured')}</div>
+                    <div class="detail-line"><span class="label">Auth Mode:</span> ${usePkce ? (config.clientSecret ? 'PKCE + Client Secret (Confidential)' : 'PKCE (Public Client)') : 'Client Secret (Confidential Client)'}</div>
+                    <div class="detail-line"><span class="label">Client Secret:</span> ${config.clientSecret ? '✓ Configured' : (usePkce ? 'Not required (public PKCE)' : '⚠ Not configured')}</div>
                 `;
 
                 const configScopes = new Set(config.scope.split(' ').filter(s => s));
@@ -350,8 +350,8 @@
                     <strong>🏥 ${config.name}</strong><br>
                     <div class="detail-line"><span class="label">ISS:</span> ${iss || 'Dynamic'}</div>
                     <div class="detail-line"><span class="label">Client ID:</span> ${config.clientId}</div>
-                    <div class="detail-line"><span class="label">Auth Mode:</span> ${usePkce ? 'PKCE (Public Client)' : 'Client Secret (Confidential Client)'}</div>
-                    <div class="detail-line"><span class="label">Client Secret:</span> ${usePkce ? 'Not used in PKCE mode' : (config.clientSecret ? '✓ Configured' : '⚠ Not configured')}</div>
+                    <div class="detail-line"><span class="label">Auth Mode:</span> ${usePkce ? (config.clientSecret ? 'PKCE + Client Secret (Confidential)' : 'PKCE (Public Client)') : 'Client Secret (Confidential Client)'}</div>
+                    <div class="detail-line"><span class="label">Client Secret:</span> ${config.clientSecret ? '✓ Configured' : (usePkce ? 'Not required (public PKCE)' : '⚠ Not configured')}</div>
                     <div class="detail-line"><span class="label">State:</span> ${state}</div>
                     <div class="detail-line"><span class="label">Nonce:</span> ${nonce}</div>
                     ${usePkce && pkce ? `<div class="detail-line"><span class="label">PKCE Method:</span> ${pkce.codeChallengeMethod}</div>` : ''}
@@ -429,9 +429,9 @@
                     serverKey: serverParam,
                     serverUrl: config.fhirBaseUrl || iss,
                     clientId: config.clientId,
-                    clientSecret: usePkce ? null : config.clientSecret,
+                    clientSecret: config.clientSecret,
                     tokenUri: effectiveTokenUrl,
-                    tokenAuthMethod: config.tokenAuthMethod || (usePkce ? 'none' : 'client_secret_post'),
+                    tokenAuthMethod: config.tokenAuthMethod || 'client_secret_post',
                     tokenReferrerPolicy: config.tokenReferrerPolicy || 'origin',
                     allowBasicAuthFallback: config.allowBasicAuthFallback !== false,
                     redirectUri: config.redirectUri,
