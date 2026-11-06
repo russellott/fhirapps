@@ -119,6 +119,7 @@ const FHIR_SERVERS = {
         clientSecret: _s.epic?.clientSecret || null,
         usePkce: false,
         tokenAuthMethod: "client_secret_post",
+        allowBasicAuthFallback: false,
         scope: "patient/*.read launch/patient openid fhirUser offline_access",
         redirectUri: `${APP_BASE_URL}/app.html`,
         launchUri: `${APP_BASE_URL}/launch.html`,
