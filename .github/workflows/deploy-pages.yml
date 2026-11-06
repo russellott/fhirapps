@@ -1,0 +1,71 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate PatientAccess/config.local.js
+        env:
+          CORS_PROXY_URL: ${{ secrets.CORS_PROXY_URL }}
+          PA_DELOITTE_CLIENT_ID: ${{ secrets.PA_DELOITTE_CLIENT_ID }}
+          PA_DELOITTE_CLIENT_SECRET: ${{ secrets.PA_DELOITTE_CLIENT_SECRET }}
+          PA_DELOITTE_DEMO_CLIENT_ID: ${{ secrets.PA_DELOITTE_DEMO_CLIENT_ID }}
+          PA_DELOITTE_DEMO_CLIENT_SECRET: ${{ secrets.PA_DELOITTE_DEMO_CLIENT_SECRET }}
+          PA_CIGNA_CLIENT_ID: ${{ secrets.PA_CIGNA_CLIENT_ID }}
+          PA_EPIC_CLIENT_ID: ${{ secrets.PA_EPIC_CLIENT_ID }}
+          PA_EPIC_CLIENT_SECRET: ${{ secrets.PA_EPIC_CLIENT_SECRET }}
+        run: |
+          cat > PatientAccess/config.local.js << JSEOF
+          window.__localSecrets = {
+              corsProxyUrl: '${CORS_PROXY_URL}',
+              deloitte: { clientId: '${PA_DELOITTE_CLIENT_ID}', clientSecret: '${PA_DELOITTE_CLIENT_SECRET}' },
+              deloitte_demo: { clientId: '${PA_DELOITTE_DEMO_CLIENT_ID}', clientSecret: '${PA_DELOITTE_DEMO_CLIENT_SECRET}' },
+              cigna: { clientId: '${PA_CIGNA_CLIENT_ID}' },
+              epic: { clientId: '${PA_EPIC_CLIENT_ID}', clientSecret: '${PA_EPIC_CLIENT_SECRET}' }
+          };
+          JSEOF
+
+      - name: Generate PayerToPayerClient/config.local.js
+        env:
+          CORS_PROXY_URL: ${{ secrets.CORS_PROXY_URL }}
+          P2P_HEALTH_INTERACTIVE_UAT_SECRET: ${{ secrets.P2P_HEALTH_INTERACTIVE_UAT_SECRET }}
+          P2P_DELOITTE_CONNECTATHON_SECRET: ${{ secrets.P2P_DELOITTE_CONNECTATHON_SECRET }}
+          P2P_CIGNA_CLIENT_ID: ${{ secrets.P2P_CIGNA_CLIENT_ID }}
+          P2P_CIGNA_CLIENT_SECRET: ${{ secrets.P2P_CIGNA_CLIENT_SECRET }}
+        run: |
+          cat > PayerToPayerClient/config.local.js << JSEOF
+          window.__localSecrets = {
+              corsProxyUrl: '${CORS_PROXY_URL}',
+              healthInteractiveUAT: { clientSecret: '${P2P_HEALTH_INTERACTIVE_UAT_SECRET}' },
+              deloitteConnectathon: { clientSecret: '${P2P_DELOITTE_CONNECTATHON_SECRET}' },
+              cignaDevSandbox: { clientId: '${P2P_CIGNA_CLIENT_ID}', clientSecret: '${P2P_CIGNA_CLIENT_SECRET}' }
+          };
+          JSEOF
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
